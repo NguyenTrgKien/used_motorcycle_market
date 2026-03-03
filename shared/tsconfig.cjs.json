@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "./dist/cjs",
+    "rootDir": "./src",
+    "declaration": false,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*"]
+}

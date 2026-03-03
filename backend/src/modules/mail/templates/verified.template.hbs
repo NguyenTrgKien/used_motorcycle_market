@@ -1,0 +1,95 @@
+<html lang='en'>
+  <head>
+    <meta charset='UTF-8' />
+    <title>Email Verification</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #f4f6f8;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      .container {
+        max-width: 500px;
+        margin: 40px auto;
+        background-color: #ffffff;
+        border-radius: 8px;
+        padding: 30px;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      }
+
+      .logo {
+        font-size: 22px;
+        font-weight: bold;
+        margin-bottom: 20px;
+        color: #4f46e5;
+      }
+
+      h2 {
+        margin-bottom: 10px;
+        color: #111827;
+      }
+
+      p {
+        font-size: 14px;
+        color: #6b7280;
+        line-height: 1.6;
+      }
+
+      .button {
+        display: inline-block;
+        margin-top: 25px;
+        padding: 12px 24px;
+        background-color: #4f46e5;
+        color: #ffffff !important;
+        text-decoration: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: bold;
+      }
+
+      .footer {
+        margin-top: 30px;
+        font-size: 12px;
+        color: #9ca3af;
+      }
+
+      .link {
+        word-break: break-all;
+        font-size: 12px;
+        margin-top: 15px;
+        color: #2563eb;
+      }
+    </style>
+  </head>
+  <body>
+
+    <div class='container'>
+      <div class='logo'>YourApp</div>
+
+      <h2>Verify your email address</h2>
+
+      <p>
+        Thank you for signing up. Please click the button below to verify your
+        email address.
+      </p>
+
+      <a href='{{verificationLink}}' class='button'>
+        Verify Email
+      </a>
+
+      <p class='link'>
+        If the button doesn't work, copy and paste this link into your browser:
+        <br />
+        {{verificationLink}}
+      </p>
+
+      <div class='footer'>
+        This link will expire in 15 minutes.
+      </div>
+    </div>
+
+  </body>
+</html>
