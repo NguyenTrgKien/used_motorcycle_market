@@ -8,6 +8,10 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { BlacklistToken } from '../blacklist_token/entities/blacklist_token.entity';
+import { JwtStrategy } from './strategys/jwt.strategy';
+import { RolesGuard } from './guards/roles.guard';
 
 @Module({
   imports: [
@@ -25,15 +29,22 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
         };
       },
     }),
+    TypeOrmModule.forFeature([BlacklistToken]),
   ],
   controllers: [AuthController],
   providers: [
     AuthService,
     LocalStrategy,
+    JwtStrategy,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
     },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
   ],
+  exports: [AuthService],
 })
 export class AuthModule {}

@@ -28,10 +28,13 @@ export class Category {
   status: CategoryStatus;
 
   @Column({ nullable: true })
-  image: string;
+  image?: string;
 
   @Column({ nullable: true })
-  icon: string;
+  icon?: string;
+
+  @Column({ unique: true })
+  slug: string;
 
   @Column({ nullable: true })
   publicId: string;

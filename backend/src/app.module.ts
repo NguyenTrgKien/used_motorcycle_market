@@ -16,6 +16,9 @@ import { NotificationModule } from './modules/notification/notification.module';
 import { SavedPostModule } from './modules/saved_post/saved_post.module';
 import { ReportModule } from './modules/report/report.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { BlacklistTokenModule } from './modules/blacklist_token/blacklist_token.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { CloudinaryModule } from './modules/cloudinary/cloudinary.module';
 
 @Module({
   imports: [
@@ -34,6 +37,9 @@ import { AuthModule } from './modules/auth/auth.module';
     SavedPostModule,
     ReportModule,
     AuthModule,
+    BlacklistTokenModule,
+    ScheduleModule.forRoot(),
+    CloudinaryModule,
   ],
   controllers: [AppController],
   providers: [AppService],

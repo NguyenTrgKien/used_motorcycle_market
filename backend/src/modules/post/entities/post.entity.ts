@@ -67,6 +67,9 @@ export class Post {
   @Column({ type: 'varchar', nullable: true, length: 100 })
   district?: string;
 
+  @Column({ unique: true })
+  slug: string;
+
   @Column({ type: 'timestamp', nullable: true })
   expiredAt?: Date;
 

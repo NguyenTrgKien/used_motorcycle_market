@@ -1,17 +1,18 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  Get,
   Post,
+  Req,
   Request,
   Res,
-  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { AuthService } from './auth.service';
 import { User } from '../user/entities/user.entity';
-import { UserRole } from '@project/shared';
-import type { Response } from 'express';
+import type { Request as ExpressRequest, Response } from 'express';
 import { Public } from 'src/common/decorators/public.decorator';
 import { RegisterDto } from './dto/register.dto';
 
@@ -29,13 +30,7 @@ export class AuthController {
     return this.handleLogin(user, res);
   }
 
-  private handleLogin(user: User, res: Response, requiredRole?: UserRole) {
-    if (requiredRole && user.role !== requiredRole) {
-      throw new UnauthorizedException(
-        `Chỉ ${requiredRole} mới được đăng nhập tại đây!`,
-      );
-    }
-
+  private handleLogin(user: User, res: Response) {
     const result = this.authService.login(user);
 
     const cookieOptions = {
@@ -55,7 +50,6 @@ export class AuthController {
     });
 
     return res.json({
-      status: true,
       message: 'Đăng nhập thành công',
       user: {
         id: user.id,
@@ -66,15 +60,74 @@ export class AuthController {
     });
   }
 
+  @Public()
   @UseGuards(LocalAuthGuard)
-  @Post('/user/login')
+  @Post('/login')
   login(@Request() req: RequestWithUser, @Res() res: Response) {
     return this.handleLogin(req.user, res);
   }
 
-  //   @UseGuards(LocalAuthGuard)
-  //   @Post('/logout')
-  //   logout(@Request() req) {
-  //     return req.logout();
-  //   }
+  @Post('/logout')
+  async logout(@Req() req: ExpressRequest, @Res() res: Response) {
+    const cookies = req.cookies as Record<string, string>;
+    const access_token = cookies['access_token'] || null;
+
+    if (!access_token) {
+      return res.json({
+        status: true,
+        message: 'Bạn chưa đăng nhập!',
+      });
+    }
+
+    await this.authService.addToBlacklist(access_token);
+
+    res.clearCookie('access_token', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+    });
+
+    res.clearCookie('refresh_token', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+    });
+
+    return res.json({
+      status: true,
+      message: 'Đăng xuất thành công!',
+    });
+  }
+
+  @Get('/me')
+  getMe(@Req() req: RequestWithUser) {
+    const user = req.user;
+
+    return {
+      message: 'Đã đăng nhập!',
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        avatar: user.avatar,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        isVerified: user.isVerified,
+      },
+    };
+  }
+
+  @Public()
+  @Post('/login-google')
+  async loginGoogle(@Body('token') token: string, @Res() res: Response) {
+    if (!token) {
+      throw new BadRequestException('Token Google không được cung cấp!');
+    }
+
+    const user = await this.authService.loginGoogle(token);
+    if (!user) {
+      throw new BadRequestException('Đăng nhập Google thất bại!');
+    }
+    return this.handleLogin(user, res);
+  }
 }

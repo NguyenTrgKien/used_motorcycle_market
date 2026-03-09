@@ -22,13 +22,13 @@ export class User {
   id: number;
 
   @Column({ nullable: true })
-  fullName: string;
+  fullName?: string;
 
   @Column({ unique: true })
   email: string;
 
-  @Column({ select: false })
-  password: string;
+  @Column({ select: false, nullable: true })
+  password?: string;
 
   @Index()
   @Column({ type: 'varchar', length: 12, nullable: true })
@@ -53,6 +53,9 @@ export class User {
     default: false,
   })
   isVerified: boolean;
+
+  @Column({ nullable: true })
+  verifyToken?: string;
 
   @CreateDateColumn()
   createdAt: Date;
