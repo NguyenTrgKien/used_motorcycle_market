@@ -19,6 +19,9 @@ import { AuthModule } from './modules/auth/auth.module';
 import { BlacklistTokenModule } from './modules/blacklist_token/blacklist_token.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CloudinaryModule } from './modules/cloudinary/cloudinary.module';
+import { UserAddressModule } from './modules/user_address/user_address.module';
+import { UserVerificationModule } from './modules/user_verification/user_verification.module';
+import { UserIdentityModule } from './modules/user_identity/user_identity.module';
 
 @Module({
   imports: [
@@ -40,6 +43,9 @@ import { CloudinaryModule } from './modules/cloudinary/cloudinary.module';
     BlacklistTokenModule,
     ScheduleModule.forRoot(),
     CloudinaryModule,
+    UserAddressModule,
+    UserVerificationModule,
+    UserIdentityModule,
   ],
   controllers: [AppController],
   providers: [AppService],

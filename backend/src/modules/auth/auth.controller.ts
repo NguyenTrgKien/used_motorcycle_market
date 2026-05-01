@@ -3,7 +3,10 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Post,
+  Query,
   Req,
   Request,
   Res,
@@ -15,6 +18,9 @@ import { User } from '../user/entities/user.entity';
 import type { Request as ExpressRequest, Response } from 'express';
 import { Public } from 'src/common/decorators/public.decorator';
 import { RegisterDto } from './dto/register.dto';
+import { VerifyEmailDto } from './dto/verifyEmail.dto';
+import { ForgotPassDto } from './dto/forgotPass.dto';
+import { ResetPassDto } from './dto/resetPass.dto';
 
 export interface RequestWithUser extends Request {
   user: User;
@@ -25,9 +31,13 @@ export class AuthController {
 
   @Public()
   @Post('/register')
-  async register(@Body() dataRegister: RegisterDto, @Res() res: Response) {
-    const user = await this.authService.register(dataRegister);
-    return this.handleLogin(user, res);
+  @HttpCode(HttpStatus.CREATED)
+  async register(@Body() dataRegister: RegisterDto) {
+    await this.authService.register(dataRegister);
+    return {
+      message:
+        'Đăng ký thành công, vui lòng kiểm tra email để xác thực tài khoản!',
+    };
   }
 
   private handleLogin(user: User, res: Response) {
@@ -58,6 +68,43 @@ export class AuthController {
         role: user.role,
       },
     });
+  }
+
+  @Public()
+  @Post('/verify-email')
+  async verifyEmail(@Body() data: VerifyEmailDto, @Res() res: Response) {
+    const user = await this.authService.verifyEmail(data);
+    return this.handleLogin(user, res);
+  }
+
+  @Public()
+  @Get('/resend-otp')
+  resendOtp(@Query() query: { email: string }) {
+    if (!query.email) {
+      throw new BadRequestException('Vui lòng truyền email để gửi lại otp!');
+    }
+    return this.authService.resendOtp(query);
+  }
+
+  @Public()
+  @Post('/forgot-password')
+  @HttpCode(HttpStatus.OK)
+  forgotPassword(@Body() data: ForgotPassDto) {
+    return this.authService.forgotPassword(data);
+  }
+
+  @Public()
+  @Post('/verify-otp')
+  @HttpCode(HttpStatus.OK)
+  verifyOtp(@Body() data: VerifyEmailDto) {
+    return this.authService.verifyOtp(data);
+  }
+
+  @Public()
+  @Post('/reset-password')
+  @HttpCode(HttpStatus.OK)
+  resetPassword(@Body() data: ResetPassDto) {
+    return this.authService.resetPassword(data);
   }
 
   @Public()

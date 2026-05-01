@@ -1,13 +1,23 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { UserService } from '../user/user.service';
-import { comparePass } from 'src/utils/handlePassword';
+import { comparePass, hashPass } from 'src/utils/handlePassword';
 import { User } from '../user/entities/user.entity';
 import { JwtService } from '@nestjs/jwt';
 import { RegisterDto } from './dto/register.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { BlacklistToken } from '../blacklist_token/entities/blacklist_token.entity';
-import { Repository } from 'typeorm';
+import { DataSource, MoreThan, Repository } from 'typeorm';
 import { OAuth2Client } from 'google-auth-library';
+import { VerifyEmailDto } from './dto/verifyEmail.dto';
+import { UserVerification } from '../user_verification/entities/user_verification.entity';
+import { VerificationType } from '@project/shared';
+import { MailService } from '../mail/mail.service';
+import { ForgotPassDto } from './dto/forgotPass.dto';
+import { ResetPassDto } from './dto/resetPass.dto';
 
 interface JwtPayload {
   exp: number;
@@ -25,6 +35,10 @@ export class AuthService {
     private jwtService: JwtService,
     @InjectRepository(BlacklistToken)
     private readonly blacklistTokenRepo: Repository<BlacklistToken>,
+    @InjectRepository(UserVerification)
+    private readonly userVerifyRepo: Repository<UserVerification>,
+    private readonly mailService: MailService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async validateUser(email: string, password: string): Promise<any> {
@@ -63,6 +77,144 @@ export class AuthService {
 
   async register(dataRegister: RegisterDto) {
     return this.userService.register(dataRegister);
+  }
+
+  async verifyEmail(data: VerifyEmailDto) {
+    const user = await this.userService.findUserByEmail(data.email);
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy email!');
+    }
+
+    if (user.isVerified) {
+      throw new BadRequestException('Tài khoản đã được xác thực trước đó!');
+    }
+
+    const record = await this.userVerifyRepo.findOne({
+      where: {
+        token: data.otp,
+        type: VerificationType.EMAIL,
+        user: {
+          id: user.id,
+        },
+      },
+    });
+
+    if (!record) {
+      throw new BadRequestException('Mã OTP không hợp lệ!');
+    }
+
+    if (new Date() > record.expiredAt) {
+      await this.userVerifyRepo.delete(record.id);
+      throw new BadRequestException(
+        'Mã OTP đã hết hạn, vui lòng yêu cầu mã mới!',
+      );
+    }
+
+    await this.userService.updateUser(user.id, { isVerified: true });
+    await this.userVerifyRepo.delete(record.id);
+    return user;
+  }
+
+  async resendOtp(query: { email: string }) {
+    const email = query.email;
+    const user = await this.userService.findUserByEmail(email);
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy email!');
+    }
+    const verifyToken = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiredAt = new Date(Date.now() + 1000 * 60 * 5);
+    await this.dataSource.transaction(async (manager) => {
+      await manager.delete(UserVerification, {
+        user: {
+          id: user.id,
+        },
+        type: VerificationType.EMAIL,
+      });
+      await manager.save(UserVerification, {
+        type: VerificationType.EMAIL,
+        token: verifyToken,
+        expiredAt,
+        user: {
+          id: user.id,
+        },
+      });
+    });
+    try {
+      await this.mailService.sendVerifyEmail(email, verifyToken);
+    } catch (error) {
+      console.log('Send mail failed', error);
+    }
+  }
+
+  async forgotPassword(data: ForgotPassDto) {
+    const { email } = data;
+    const user = await this.userService.findUserByEmail(email);
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy email!');
+    }
+    const verifyToken = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiredAt = new Date(Date.now() + 1000 * 60 * 5);
+    await this.userVerifyRepo.delete({
+      user: { id: user.id },
+      type: VerificationType.EMAIL,
+    });
+    await this.userVerifyRepo.save({
+      type: VerificationType.EMAIL,
+      token: verifyToken,
+      expiredAt,
+      user: {
+        id: user.id,
+      },
+    });
+    try {
+      await this.mailService.sendVerifyEmail(email, verifyToken);
+    } catch (error) {
+      console.log('Send mail failed', error);
+    }
+    return { message: 'OTP đã được gửi về email!' };
+  }
+
+  async verifyOtp(data: VerifyEmailDto) {
+    const { email, otp } = data;
+    const user = await this.userService.findUserByEmail(email);
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy email!');
+    }
+    const isValid = await this.userVerifyRepo.findOne({
+      where: {
+        user: {
+          id: user.id,
+        },
+        token: otp,
+        type: VerificationType.EMAIL,
+        expiredAt: MoreThan(new Date()),
+      },
+    });
+    if (!isValid)
+      throw new BadRequestException('OTP không đúng hoặc đã hết hạn!');
+    return { message: 'Xác thực thành công!' };
+  }
+
+  async resetPassword(data: ResetPassDto) {
+    const { email, otp, newPassword } = data;
+    const user = await this.userService.findUserByEmail(email);
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy email!');
+    }
+    const isValid = await this.userVerifyRepo.findOne({
+      where: {
+        user: {
+          id: user.id,
+        },
+        token: otp,
+        type: VerificationType.EMAIL,
+      },
+    });
+    if (!isValid) throw new BadRequestException('Phiên xác thực hết hạn!');
+    await this.userVerifyRepo.delete(isValid.id);
+    const hashed = await hashPass(newPassword);
+    await this.userService.updatePassword(email, hashed);
+    return { message: 'Đặt lại mật khẩu thành công!' };
   }
 
   async addToBlacklist(token: string) {

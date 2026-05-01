@@ -6,14 +6,15 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { RegisterDto } from '../auth/dto/register.dto';
 import { hashPass } from 'src/utils/handlePassword';
-import { UserRole, UserStatus } from '@project/shared';
+import { UserRole, UserStatus, VerificationType } from '@project/shared';
 import { nanoid } from 'nanoid';
 import { MailService } from '../mail/mail.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { UserVerification } from '../user_verification/entities/user_verification.entity';
 
 @Injectable()
 export class UserService {
@@ -22,6 +23,7 @@ export class UserService {
     private readonly userRepo: Repository<User>,
     private readonly mailService: MailService,
     private readonly cloudinaryService: CloudinaryService,
+    private readonly dataSource: DataSource,
   ) {}
   async findUserById(userId: number) {
     return await this.userRepo.findOne({
@@ -33,55 +35,64 @@ export class UserService {
   }
 
   async findUserByEmail(email: string) {
-    const user = await this.userRepo
-      .createQueryBuilder('user')
-      .addSelect('user.password')
-      .where('user.email = :email', { email: email })
-      .getOne();
+    const user = await this.userRepo.findOne({
+      where: {
+        email,
+      },
+      relations: ['verifications'],
+    });
     return user;
   }
 
   async register(dataRegister: RegisterDto) {
+    const { email, password } = dataRegister;
+    const hashPassword = await hashPass(password);
+    const fullName = `User-${nanoid(4)}`;
+
+    const { newUser, verifyToken } = await this.dataSource.transaction(
+      async (manager) => {
+        try {
+          const newUser = await manager.save(User, {
+            email,
+            password: hashPassword,
+            role: UserRole.USER,
+            fullName,
+            isVerified: false,
+          });
+
+          const verifyToken = Math.floor(
+            100000 + Math.random() * 900000,
+          ).toString();
+          const expiredAt = new Date(Date.now() + 1000 * 60 * 5);
+          await manager.save(UserVerification, {
+            type: VerificationType.EMAIL,
+            token: verifyToken,
+            expiredAt,
+            user: {
+              id: newUser.id,
+            },
+          });
+
+          return { newUser, verifyToken };
+        } catch (error: any) {
+          if (
+            error instanceof Error &&
+            'code' in error &&
+            error.code === 'ER_DUP_ENTRY'
+          ) {
+            throw new BadRequestException('Email đã tồn tại!');
+          }
+          throw error;
+        }
+      },
+    );
     try {
-      const { email, password } = dataRegister;
-
-      const user = await this.userRepo.findOne({
-        where: {
-          email,
-        },
-      });
-
-      if (user) {
-        throw new BadRequestException(
-          'Email đã được sử dụng! Vui lòng chọn email khác!',
-        );
-      }
-
-      const hashPassword = await hashPass(password);
-      const fullName = `User-${nanoid(4)}`;
-      const verifyToken = nanoid(32);
-      const entity = this.userRepo.create({
-        email,
-        password: hashPassword,
-        role: UserRole.USER,
-        fullName,
-        isVerified: false,
-        verifyToken,
-      });
-
-      await this.userRepo.save(entity);
-
-      await this.mailService.sendVerifyEmail(email, fullName, verifyToken);
-
-      return entity;
+      await this.mailService.sendVerifyEmail(email, verifyToken);
     } catch (error) {
-      console.log(error);
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      const err = error as Error;
-      throw new InternalServerErrorException(`Lỗi server: ${err.message}`);
+      console.log('Send mail failed', error);
     }
+
+    return newUser;
   }
 
   async getAllUsers() {
@@ -154,8 +165,9 @@ export class UserService {
       if (dataUpdate.phone) {
         user.phone = dataUpdate.phone;
       }
-      if (dataUpdate.province) {
-        user.province = dataUpdate.province;
+
+      if (dataUpdate.isVerified) {
+        user.isVerified = dataUpdate.isVerified;
       }
 
       await this.userRepo.save(user);
@@ -165,13 +177,22 @@ export class UserService {
         data: user,
       };
     } catch (error) {
-      console.log('==========================>', error);
       if (error instanceof NotFoundException) {
         throw error;
       }
       const err = error as Error;
       throw new InternalServerErrorException(`Lỗi server: ${err.message}`);
     }
+  }
+
+  async updatePassword(email: string, newPassword: string) {
+    const user = await this.findUserByEmail(email);
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy email!');
+    }
+    await this.userRepo.update(user.id, {
+      password: newPassword,
+    });
   }
 
   async banUser(id: number) {

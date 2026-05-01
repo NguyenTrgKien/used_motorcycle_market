@@ -16,21 +16,15 @@ const fetchUser = async () => {
 
 export const useUser = () => {
   const queryClient = useQueryClient();
-  const {
-    data: user,
-    isLoading,
-    refetch,
-  } = useQuery({
+  const { data: user, isLoading } = useQuery({
     queryKey: ["user"],
     queryFn: fetchUser,
-    staleTime: 5 * 60 * 100,
+    staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
-    refetchOnMount: false,
   });
 
   const refetchUser = async () => {
     await queryClient.invalidateQueries({ queryKey: ["user"] });
-    return await refetch();
   };
 
   return { user, isLoading, refetchUser };

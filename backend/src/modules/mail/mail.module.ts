@@ -11,8 +11,6 @@ import { join } from 'path';
     MailerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
-        console.log(join(__dirname, 'templates'));
-
         return {
           transport: {
             host: configService.get<string>('MAIL_HOST'),

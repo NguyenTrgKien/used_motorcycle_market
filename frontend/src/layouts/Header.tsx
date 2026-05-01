@@ -1,5 +1,5 @@
-import logo from "../../../assets/images/logo(1).png";
-import avatar_default from "../../../assets/images/avatar_default.png";
+import logo from "../assets/images/logo(1).png";
+import avatar_default from "../assets/images/avatar_default.png";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faAngleDown,
@@ -7,27 +7,28 @@ import {
   faBars,
   faCircleQuestion,
   faClockRotateLeft,
+  faGear,
   faKey,
   faMagnifyingGlass,
   faRightFromBracket,
   faSearch,
   faStar,
   faTableCells,
-  faUser,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   faBell,
   faCommentDots,
   faHeart,
 } from "@fortawesome/free-regular-svg-icons";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import HeaderBanner from "../../../components/HeaderBanner";
-import LoginAndRegisterModal from "../../../components/auth/Login&RegisterModal";
-import { useUser } from "../../../hooks/useUser";
-import { useAuth } from "../../../hooks/useAuth";
-import ChooseAddress from "../../../components/ChooseAdress";
+import HeaderBanner from "../components/HeaderBanner";
+import LoginAndRegisterModal from "../components/auth/Login&RegisterModal";
+import { useUser } from "../hooks/useUser";
+import { useAuth } from "../hooks/useAuth";
+import ChooseAddress from "../components/ChooseAdress";
+import useAuthModal from "../hooks/useAuthModal";
 
 const utilities = [
   { id: 1, title: "Tin đăng đã lưu", icon: faHeart, link: "/saved-posts" },
@@ -52,7 +53,12 @@ const utilities = [
   { id: 5, title: "Đánh giá từ tôi", icon: faStar, link: "/my-reviews" },
 ];
 const others = [
-  { id: 1, title: "Hồ sơ cá nhân", icon: faUser, link: "/profile" },
+  {
+    id: 1,
+    title: "Cài đặt tài khoản",
+    icon: faGear,
+    link: "/setting/profile",
+  },
   { id: 2, title: "Đổi mật khẩu", icon: faKey, link: "/change-password" },
   { id: 3, title: "Trợ giúp", icon: faCircleQuestion, link: "/support" },
   {
@@ -67,13 +73,15 @@ function Header() {
   const navigate = useNavigate();
   const { user } = useUser();
   const { logout } = useAuth();
+  const { isOpen, openAuthModal, closeAuthModal } = useAuthModal();
+  const location = useLocation();
+  const isFixedHard = location.pathname.startsWith("/setting");
   const [showPopup, setShowPopup] = useState(false);
   const elementRef = useRef<HTMLDivElement>(null);
   const elementAreaRef = useRef<HTMLDivElement>(null);
   const elementAreaMobileRef = useRef<HTMLDivElement>(null);
   const [isFixed, setIsFixed] = useState(false);
   const [showPopupArea, setShowPopupArea] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
   const [showMenuBar, setShowMenuBar] = useState(false);
 
   useEffect(() => {
@@ -98,7 +106,7 @@ function Header() {
   }, []);
 
   useEffect(() => {
-    const handleScroll = () => setIsFixed(window.scrollY > 200);
+    const handleScroll = () => setIsFixed(window.scrollY > 150);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
@@ -109,11 +117,13 @@ function Header() {
 
   return (
     <>
-      <div className={`${isFixed ? "md:h-[15rem]" : "hidden"}`}></div>
+      <div
+        className={`${isFixed && isFixedHard ? "md:h-[15rem]" : "hidden"}`}
+      ></div>
       <header
-        className={`${isFixed ? "fixed top-0 left-0 z-50" : "relative"} w-full`}
+        className={`${isFixed || isFixedHard ? "fixed top-0 left-0 z-50" : "relative"} w-full`}
       >
-        {!isFixed && (
+        {!isFixed && !isFixedHard && (
           <>
             <HeaderBanner />
             <div className="absolute inset-0 bg-gray-500/25"></div>
@@ -121,7 +131,7 @@ function Header() {
         )}
 
         <div
-          className={`absolute top-0 left-0 w-full h-[6.5rem] flex items-center justify-between px-4 sm:px-6 md:px-[2rem] ${isFixed ? "text-gray-600 bg-white shadow-sm" : "text-white"}`}
+          className={`absolute top-0 left-0 w-full h-[6.5rem] flex items-center justify-between px-4 sm:px-6 md:px-[2rem] ${isFixed || isFixedHard ? "text-gray-600 bg-white" : "text-white"}`}
         >
           <div className="flex items-center gap-4 md:gap-15 shrink-0">
             <div
@@ -130,7 +140,7 @@ function Header() {
             >
               <FontAwesomeIcon icon={faBars} className="text-[1.8rem]" />
             </div>
-            <a href="#">
+            <a href="/">
               <img
                 src={logo}
                 alt="Mua bán xe máy"
@@ -143,7 +153,7 @@ function Header() {
             </div>
           </div>
 
-          {isFixed && (
+          {(isFixed || isFixedHard) && (
             <div className="hidden sm:flex flex-1 mx-4 md:mx-6 max-w-[45rem] h-[4rem] relative">
               <input
                 type="text"
@@ -167,13 +177,13 @@ function Header() {
               </span>
             </button>
             <button
-              className={`hidden lg:flex items-center gap-1 px-5 h-[4rem] rounded-full ${!isFixed ? "bg-white text-gray-600" : "border border-gray-300"} hover:cursor-pointer`}
+              className={`hidden lg:flex items-center gap-1 px-5 h-[4rem] rounded-full ${!isFixed && !isFixedHard ? "bg-white text-gray-600" : "border border-gray-300"} hover:cursor-pointer`}
             >
               <FontAwesomeIcon icon={faCommentDots} />
               <span>Liên hệ</span>
             </button>
             <button
-              className={`hidden lg:block px-5 h-[4rem] rounded-full ${!isFixed ? "bg-white text-gray-600" : "border border-gray-300"} hover:cursor-pointer`}
+              className={`hidden lg:block px-5 h-[4rem] rounded-full ${!isFixed && !isFixedHard ? "bg-white text-gray-600" : "border border-gray-300"} hover:cursor-pointer`}
             >
               Quản lý tin
             </button>
@@ -181,7 +191,7 @@ function Header() {
             {user ? (
               <div className="relative text-gray-600" ref={elementRef}>
                 <button
-                  className={`relative w-auto h-[4rem] flex items-center gap-2.5 rounded-full px-2 cursor-pointer transition-colors duration-300 ${!isFixed ? "bg-white text-gray-600" : "border border-gray-300 hover:border-gray-300"} hover:cursor-pointer`}
+                  className={`relative w-auto h-[4rem] flex items-center gap-2.5 rounded-full px-2 cursor-pointer transition-colors duration-300 ${!isFixed && !isFixedHard ? "bg-white text-gray-600" : "border border-gray-300 hover:border-gray-300"} hover:cursor-pointer`}
                   onClick={() => setShowPopup((prev) => !prev)}
                 >
                   <div className="w-[3rem] h-[3rem] rounded-full overflow-hidden">
@@ -262,8 +272,12 @@ function Header() {
                               <div
                                 key={p.id}
                                 onClick={() => {
-                                  if (p.link) return navigate(p.link);
-                                  else if (isLogout) handleLogout();
+                                  if (p.link) {
+                                    navigate(p.link);
+                                  } else if (isLogout) {
+                                    handleLogout();
+                                  }
+                                  setShowPopup(false);
                                 }}
                                 className={`flex items-center justify-between gap-2.5 px-8 py-6 hover:bg-gray-50 transition-colors duration-300 font-semibold ${p.color && p.color} hover:cursor-pointer ${index === others.length - 1 && "rounded-bl-3xl rounded-br-3xl"} ${index === 0 && "rounded-tl-3xl rounded-tr-3xl"}`}
                               >
@@ -284,7 +298,7 @@ function Header() {
             ) : (
               <button
                 className="px-5 h-[4rem] rounded-full bg-orange-600 hover:bg-orange-500 transition-colors duration-300 text-white whitespace-nowrap"
-                onClick={() => setShowAuthModal(true)}
+                onClick={() => openAuthModal()}
               >
                 Đăng nhập
               </button>
@@ -292,7 +306,7 @@ function Header() {
           </div>
         </div>
 
-        {!isFixed && (
+        {!isFixed && !isFixedHard && (
           <div className="absolute flex flex-col left-[50%] -translate-x-[50%] w-[92%] sm:w-[82%] md:w-[70%] xl:w-[60%] -bottom-[7rem] md:-bottom-[5rem] lg:-bottom-[4rem] bg-white item-shadow rounded-xl transition-discrete duration-300">
             <div className="absolute text-nowrap block xl:bottom-[calc(100%+5rem)] bottom-[calc(100%+2rem)] left-[50%] -translate-x-[50%] text-[1.8rem] md:text-[2.2rem] lg:text-[2.5rem] xl:text-[2.8rem] text-center text-white font-medium">
               Xe ưng ý đang chờ bạn đấy!
@@ -348,9 +362,7 @@ function Header() {
         )}
 
         <AnimatePresence>
-          {showAuthModal && (
-            <LoginAndRegisterModal onClose={() => setShowAuthModal(false)} />
-          )}
+          {isOpen && <LoginAndRegisterModal onClose={() => closeAuthModal()} />}
         </AnimatePresence>
 
         <AnimatePresence>

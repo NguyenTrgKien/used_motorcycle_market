@@ -12,6 +12,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { BlacklistToken } from '../blacklist_token/entities/blacklist_token.entity';
 import { JwtStrategy } from './strategys/jwt.strategy';
 import { RolesGuard } from './guards/roles.guard';
+import { UserVerification } from '../user_verification/entities/user_verification.entity';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
@@ -29,7 +31,8 @@ import { RolesGuard } from './guards/roles.guard';
         };
       },
     }),
-    TypeOrmModule.forFeature([BlacklistToken]),
+    TypeOrmModule.forFeature([BlacklistToken, UserVerification]),
+    MailModule,
   ],
   controllers: [AuthController],
   providers: [

@@ -15,7 +15,7 @@ export const useAuth = () => {
   const logoutMutation = useMutation({
     mutationFn: () => axiosInstance.post("/api/v1/auth/logout"),
     onSuccess: () => {
-      queryClient.removeQueries({ queryKey: ["user"] });
+      queryClient.setQueryData(["user"], null);
     },
   });
 
