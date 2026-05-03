@@ -6,6 +6,7 @@ import { BrowserRouter as Router } from "react-router-dom";
 import { Bounce, ToastContainer } from "react-toastify";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AuthModalProvider from "./contexts/useAuthModal.tsx";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
 const queryClient = new QueryClient();
 
@@ -14,6 +15,7 @@ createRoot(document.getElementById("root")!).render(
     <Router>
       <AuthModalProvider>
         <QueryClientProvider client={queryClient}>
+          <ReactQueryDevtools initialIsOpen={false} />
           <ToastContainer
             position="top-right"
             autoClose={1500}

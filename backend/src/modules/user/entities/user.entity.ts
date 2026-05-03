@@ -62,6 +62,12 @@ export class User {
   })
   isVerified: boolean;
 
+  @Column({ nullable: true })
+  googleId?: string;
+
+  @Column({ nullable: true })
+  facebookId?: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

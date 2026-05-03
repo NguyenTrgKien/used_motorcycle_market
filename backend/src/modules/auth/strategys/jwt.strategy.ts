@@ -38,7 +38,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(req: Request, payload: JwtPayload) {
     const cookies = req.cookies as Record<string, string>;
     const token = cookies['access_token'] ?? null;
-
+    if (!token) {
+      throw new UnauthorizedException('No token');
+    }
     const isBlacklisted = await this.authService.isBlacklisted(token);
     if (isBlacklisted) {
       throw new UnauthorizedException(

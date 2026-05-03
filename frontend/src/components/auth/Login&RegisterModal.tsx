@@ -170,6 +170,10 @@ function LoginAndRegisterModal({ onClose }: LoginAndRegisterModalProp) {
     }
   };
 
+  const handleLoginWithGoogle = () => {
+    window.location.href = "http://localhost:8080/api/v1/auth/login-google";
+  };
+
   return (
     <div className="fixed inset-0 w-full h-full flex items-center justify-center bg-[#38383873]">
       <motion.div
@@ -368,14 +372,17 @@ function LoginAndRegisterModal({ onClose }: LoginAndRegisterModalProp) {
                 <span className="flex-1 block border-t border-t-gray-400"></span>
               </div>
               <div className="flex items-center justify-center gap-10">
-                <div className="w-14 h-14 rounded-full ">
+                <div
+                  className="w-14 h-14 rounded-full cursor-pointer"
+                  onClick={handleLoginWithGoogle}
+                >
                   <img
                     src={ggLogo}
                     alt="Google Logo"
                     className="w-full h-full object-cover"
                   />
                 </div>
-                <div className="w-14 h-14 rounded-full ">
+                <div className="w-14 h-14 rounded-full cursor-pointer">
                   <img
                     src={faceLogo}
                     alt="FaceBook Logo"

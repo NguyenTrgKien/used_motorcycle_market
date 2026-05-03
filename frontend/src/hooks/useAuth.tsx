@@ -1,8 +1,10 @@
+import { useNavigate } from "react-router-dom";
 import axiosInstance from "../configs/axiosInstance";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 export const useAuth = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const loginMutation = useMutation({
     mutationFn: (data: { email: string; password: string }) =>
@@ -16,6 +18,8 @@ export const useAuth = () => {
     mutationFn: () => axiosInstance.post("/api/v1/auth/logout"),
     onSuccess: () => {
       queryClient.setQueryData(["user"], null);
+      queryClient.removeQueries({ queryKey: ["user"] });
+      navigate("/");
     },
   });
 

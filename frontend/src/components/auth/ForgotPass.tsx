@@ -1,4 +1,9 @@
-import { faAngleLeft, faCheck } from "@fortawesome/free-solid-svg-icons";
+import {
+  faAngleLeft,
+  faCheck,
+  faEye,
+  faEyeSlash,
+} from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useState } from "react";
 import axiosInstance from "../../configs/axiosInstance";
@@ -17,6 +22,10 @@ function ForgotPass({ setStep }: ForgotPassProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errMessage, setErrMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState({
+    newPassword: false,
+    confirmPassword: false,
+  });
   const [errMessageReset, setErrMessageReset] = useState({
     newPassword: "",
     confirmPassword: "",
@@ -55,7 +64,7 @@ function ForgotPass({ setStep }: ForgotPassProps) {
       setErrMessage("Vui lòng nhập mã OTP đã gửi đến email!");
       return;
     }
-    if (otp.length < 6) {
+    if (otp.length < 6 || otp.length > 6) {
       setErrMessage("Mã OTP phải đủ 6 số!");
       return;
     }
@@ -132,7 +141,7 @@ function ForgotPass({ setStep }: ForgotPassProps) {
       </div>
       {stepForgot === "email" ? (
         <>
-          <p className="text-gray-500 text-[1.4rem] w-full py-2 px-5 rounded-xl mb-5 bg-blue-100">
+          <p className="text-blue-500 text-[1.4rem] w-full py-2 px-5 rounded-xl mb-5 bg-blue-50">
             Nhập email để nhận mã otp
           </p>
           <label className="text-gray-500">Email</label>
@@ -197,13 +206,29 @@ function ForgotPass({ setStep }: ForgotPassProps) {
               <label htmlFor="newPassword" className="text-gray-500">
                 Mật khẩu mới *
               </label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full h-[4.2rem] outline-none mt-2 pl-6 border border-gray-300 rounded-xl"
-                placeholder="******"
-              />
+              <div className="relative w-full h-[4.2rem]">
+                <input
+                  type={showPassword.newPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full h-full outline-none mt-2 pl-6 border border-gray-300 rounded-xl"
+                  placeholder="******"
+                  onFocus={() => setErrMessage("")}
+                />
+                <button
+                  className="absolute top-[50%] right-6 -translate-y-[50%] cursor-pointer"
+                  onClick={() =>
+                    setShowPassword((prev) => ({
+                      ...prev,
+                      newPassword: !prev.newPassword,
+                    }))
+                  }
+                >
+                  <FontAwesomeIcon
+                    icon={showPassword.newPassword ? faEye : faEyeSlash}
+                  />
+                </button>
+              </div>
               <p className="text-[1.4rem] text-red-500 mt-1">
                 {errMessageReset.newPassword}
               </p>
@@ -212,13 +237,29 @@ function ForgotPass({ setStep }: ForgotPassProps) {
               <label htmlFor="confirmPassword" className="text-gray-500">
                 Xác nhận mật khẩu *
               </label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full h-[4.2rem] outline-none mt-2 pl-6 border border-gray-300 rounded-xl"
-                placeholder="******"
-              />
+              <div className="relative w-full h-[4.2rem]">
+                <input
+                  type={showPassword.confirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full h-full outline-none mt-2 pl-6 border border-gray-300 rounded-xl"
+                  placeholder="******"
+                  onFocus={() => setErrMessage("")}
+                />
+                <button
+                  className="absolute top-[50%] right-6 -translate-y-[50%] cursor-pointer"
+                  onClick={() =>
+                    setShowPassword((prev) => ({
+                      ...prev,
+                      confirmPassword: !prev.confirmPassword,
+                    }))
+                  }
+                >
+                  <FontAwesomeIcon
+                    icon={showPassword.confirmPassword ? faEye : faEyeSlash}
+                  />
+                </button>
+              </div>
               <p className="text-[1.4rem] text-red-500 mt-1">
                 {errMessageReset.confirmPassword}
               </p>

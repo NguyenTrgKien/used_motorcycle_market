@@ -25,6 +25,24 @@ export class UserService {
     private readonly cloudinaryService: CloudinaryService,
     private readonly dataSource: DataSource,
   ) {}
+  async create(data: {
+    email: string;
+    fullName?: string;
+    avatar?: string;
+    googleId: string;
+  }) {
+    let fullName = data.fullName;
+    if (!fullName) {
+      fullName = `User-${nanoid(4)}`;
+    }
+    return await this.userRepo.save({
+      email: data.email,
+      googleId: data.googleId,
+      fullName,
+      ...(data.avatar ? { avatar: data.avatar } : {}),
+    });
+  }
+
   async findUserById(userId: number) {
     return await this.userRepo.findOne({
       where: {

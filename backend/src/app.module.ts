@@ -22,6 +22,8 @@ import { CloudinaryModule } from './modules/cloudinary/cloudinary.module';
 import { UserAddressModule } from './modules/user_address/user_address.module';
 import { UserVerificationModule } from './modules/user_verification/user_verification.module';
 import { UserIdentityModule } from './modules/user_identity/user_identity.module';
+import { AddressController } from './modules/address/address.controller';
+import { AddressModule } from './modules/address/address.module';
 
 @Module({
   imports: [
@@ -46,8 +48,9 @@ import { UserIdentityModule } from './modules/user_identity/user_identity.module
     UserAddressModule,
     UserVerificationModule,
     UserIdentityModule,
+    AddressModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, AddressController],
   providers: [AppService],
 })
 export class AppModule {}

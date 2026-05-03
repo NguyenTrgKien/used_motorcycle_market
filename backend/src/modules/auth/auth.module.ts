@@ -14,6 +14,7 @@ import { JwtStrategy } from './strategys/jwt.strategy';
 import { RolesGuard } from './guards/roles.guard';
 import { UserVerification } from '../user_verification/entities/user_verification.entity';
 import { MailModule } from '../mail/mail.module';
+import { GoogleStrategy } from './strategys/google.strategy';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { MailModule } from '../mail/mail.module';
     AuthService,
     LocalStrategy,
     JwtStrategy,
+    GoogleStrategy,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

@@ -1,6 +1,7 @@
 import {
   faCircleUser,
   faClock,
+  faHeart,
   faLocationDot,
   faReceipt,
   faShield,
@@ -34,10 +35,16 @@ const settingMenus = [
     id: 4,
     title: "Địa chỉ",
     icon: faLocationDot,
-    link: "account",
+    link: "address",
   },
   {
-    id: 4,
+    id: 5,
+    title: "Tin đã lưu",
+    icon: faHeart,
+    link: "save-listing",
+  },
+  {
+    id: 6,
     title: "Quản lý lịch sử đăng nhập",
     icon: faClock,
     link: "login-tracking",
@@ -54,7 +61,7 @@ function Setting() {
     <div className="flex gap-[2rem] pt-[8.5rem] px-[15rem]">
       <div className="w-[30rem] h-auto border border-gray-200 rounded-xl bg-white p-[2rem]">
         {isLoading ? (
-          <div className="text-center pb-[3rem] mb-[3rem] border-b border-b-gray-200">
+          <div className="text-center pb-[2rem] mb-[2rem] border-b border-b-gray-200">
             <div className="w-[6rem] h-[6rem] rounded-full bg-gray-200 animate-pulse mx-auto" />
             <div className="h-[1.6rem] w-[12rem] bg-gray-200 animate-pulse rounded-md mt-2 mx-auto" />
             <div className="h-[1.4rem] w-[9rem] bg-gray-200 animate-pulse rounded-md mt-2 mx-auto" />
@@ -63,14 +70,14 @@ function Setting() {
             </div>
           </div>
         ) : (
-          <div className="text-center pb-[3rem] mb-[3rem] border-b border-b-gray-200">
+          <div className="text-center pb-[2rem] mb-[2rem] border-b border-b-gray-200">
             <div className="w-[6rem] h-[6rem] rounded-full flex items-center justify-center bg-cyan-200 text-blue-800 font-semibold  mx-auto">
               NT
             </div>
             <p className="mt-2">{user.fullName}</p>
             <p>{user.phone}</p>
             <div className="flex justify-center">
-              <span className="block px-6 py-2 text-[1.4rem] bg-green-100 text-green-700 rounded-xl">
+              <span className="block px-6 py-2 text-[1.4rem] bg-green-100 text-green-700 rounded-full mt-2">
                 Chưa xác minh
               </span>
             </div>
@@ -83,7 +90,7 @@ function Setting() {
               <Link
                 to={item.link}
                 key={item.id}
-                className={`flex items-center gap-4 py-6 px-2 ${lastSegment === item.link ? "bg-gray-100" : ""} rounded-lg hover:cursor-pointer text-gray-500`}
+                className={`flex items-center gap-4 py-6 px-5 ${lastSegment === item.link ? "bg-gray-100" : ""} rounded-lg hover:cursor-pointer text-gray-500`}
               >
                 <FontAwesomeIcon icon={item.icon} className="text-[1.8rem]" />
                 <span>{item.title}</span>
@@ -94,14 +101,14 @@ function Setting() {
           <div>
             <Link
               to={""}
-              className={`flex items-center gap-4 py-6 px-2 ${lastSegment === "change-password" ? "bg-gray-100" : ""} rounded-lg hover:cursor-pointer text-gray-500`}
+              className={`flex items-center gap-4 py-6 px-5 ${lastSegment === "change-password" ? "bg-gray-100" : ""} rounded-lg hover:cursor-pointer text-gray-500`}
             >
               <FontAwesomeIcon icon={faUnlock} className="text-[1.8rem]" />
               <span>Cài đặt tài khoản</span>
             </Link>
             <Link
               to={""}
-              className={`flex items-center gap-4 py-6 px-2 ${lastSegment === "security" ? "bg-gray-100" : ""} rounded-lg hover:cursor-pointer text-gray-500`}
+              className={`flex items-center gap-4 py-6 px-5 ${lastSegment === "security" ? "bg-gray-100" : ""} rounded-lg hover:cursor-pointer text-gray-500`}
             >
               <FontAwesomeIcon icon={faShield} className="text-[1.8rem]" />
               <span>Bảo mật & quyền riêng tư</span>
@@ -109,7 +116,7 @@ function Setting() {
           </div>
         </div>
       </div>
-      <div className="w-full flex-1 h-[20rem] border border-gray-200 bg-white rounded-xl">
+      <div className="w-full flex-1 h-auto border border-gray-200 bg-white rounded-xl">
         <Outlet />
       </div>
     </div>

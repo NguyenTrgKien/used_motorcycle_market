@@ -196,7 +196,7 @@ function Header() {
                 >
                   <div className="w-[3rem] h-[3rem] rounded-full overflow-hidden">
                     <img
-                      src={user.avatar ?? avatar_default}
+                      src={user.avatar || avatar_default}
                       alt="Avatar"
                       className="w-full h-full rounded-full object-cover border border-gray-200"
                     />
@@ -218,11 +218,17 @@ function Header() {
                     >
                       <div className="flex items-center gap-6 border-b border-b-gray-200 p-6 bg-white">
                         <img
-                          src={user.avatar ?? avatar_default}
+                          src={user.avatar || avatar_default}
                           alt="Avatar"
                           className="w-16 h-16 rounded-full object-cover shrink-0 border border-gray-200"
                         />
-                        <div className="text-start min-w-0">
+                        <div
+                          className="text-start min-w-0 cursor-pointer"
+                          onClick={() => {
+                            navigate("/setting/profile");
+                            setShowPopup(false);
+                          }}
+                        >
                           <h4 className="font-semibold truncate">
                             {user.fullName}
                           </h4>
@@ -380,19 +386,33 @@ function Header() {
                 className="fixed inset-0 w-[80%] h-full z-[999] "
               >
                 <div className="relative w-full h-full bg-white text-gray-600 z-[999]">
-                  <div className="flex items-center gap-6 border-b border-b-gray-200 p-6 bg-white">
-                    <img
-                      src={user.avatar ?? avatar_default}
-                      alt="Avatar"
-                      className="w-16 h-16 rounded-full object-cover shrink-0 border border-gray-200"
-                    />
-                    <div className="text-start min-w-0">
-                      <h4 className="font-semibold truncate">
-                        {user.fullName}
-                      </h4>
-                      <p className="text-[1.2rem] truncate">{user.email}</p>
+                  {user ? (
+                    <div className="flex items-center gap-6 border-b border-b-gray-200 p-6 bg-white">
+                      <img
+                        src={user.avatar || avatar_default}
+                        alt="Avatar"
+                        className="w-16 h-16 rounded-full object-cover shrink-0 border border-gray-200"
+                      />
+                      <div className="text-start min-w-0">
+                        <h4 className="font-semibold truncate">
+                          {user.fullName}
+                        </h4>
+                        <p className="text-[1.2rem] truncate">{user.email}</p>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="p-6 border-b border-b-gray-200">
+                      <button
+                        className="w-full px-5 h-[4rem] rounded-full bg-orange-600 text-white"
+                        onClick={() => {
+                          openAuthModal();
+                          setShowMenuBar(false);
+                        }}
+                      >
+                        Đăng nhập
+                      </button>
+                    </div>
+                  )}
 
                   <div className="space-y-12 py-10">
                     <div

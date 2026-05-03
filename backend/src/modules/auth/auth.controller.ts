@@ -21,9 +21,14 @@ import { RegisterDto } from './dto/register.dto';
 import { VerifyEmailDto } from './dto/verifyEmail.dto';
 import { ForgotPassDto } from './dto/forgotPass.dto';
 import { ResetPassDto } from './dto/resetPass.dto';
+import { AuthGuard } from '@nestjs/passport';
+import { GoogleUser } from './strategys/google.strategy';
 
 export interface RequestWithUser extends Request {
   user: User;
+}
+export interface GoogleUserRequest extends Request {
+  user: GoogleUser;
 }
 @Controller('auth')
 export class AuthController {
@@ -45,8 +50,10 @@ export class AuthController {
 
     const cookieOptions = {
       httpOnly: true,
-      secure: true,
-      sameSite: 'none' as const,
+      // secure: true,
+      // sameSite: 'none' as const,
+      secure: false,
+      sameSite: 'lax' as const,
     };
 
     res.cookie('access_token', result.access_token, {
@@ -130,14 +137,18 @@ export class AuthController {
 
     res.clearCookie('access_token', {
       httpOnly: true,
-      secure: true,
-      sameSite: 'none',
+      // secure: true,
+      // sameSite: 'none',
+      secure: false,
+      sameSite: 'lax' as const,
     });
 
     res.clearCookie('refresh_token', {
       httpOnly: true,
-      secure: true,
-      sameSite: 'none',
+      // secure: true,
+      // sameSite: 'none',
+      secure: false,
+      sameSite: 'lax' as const,
     });
 
     return res.json({
@@ -149,7 +160,6 @@ export class AuthController {
   @Get('/me')
   getMe(@Req() req: RequestWithUser) {
     const user = req.user;
-
     return {
       message: 'Đã đăng nhập!',
       user: {
@@ -160,21 +170,41 @@ export class AuthController {
         phone: user.phone,
         role: user.role,
         isVerified: user.isVerified,
+        googleId: user.googleId,
       },
     };
   }
 
+  // Cần cài thư viện passport-google-oauth20
   @Public()
-  @Post('/login-google')
-  async loginGoogle(@Body('token') token: string, @Res() res: Response) {
-    if (!token) {
-      throw new BadRequestException('Token Google không được cung cấp!');
-    }
+  @UseGuards(AuthGuard('google'))
+  @Get('/login-google')
+  loginGoogle() {}
 
-    const user = await this.authService.loginGoogle(token);
-    if (!user) {
-      throw new BadRequestException('Đăng nhập Google thất bại!');
-    }
-    return this.handleLogin(user, res);
+  @Public()
+  @UseGuards(AuthGuard('google'))
+  @Get('/google/callback')
+  async googleCallback(@Req() req: GoogleUserRequest, @Res() res: Response) {
+    const user = req.user;
+    const dataUser = await this.authService.findOrCreate(user);
+    const result = this.authService.login(dataUser);
+    const cookieOptions = {
+      httpOnly: true,
+      // secure: true,
+      // sameSite: 'none' as const,
+      secure: false,
+      sameSite: 'lax' as const,
+    };
+
+    res.cookie('access_token', result.access_token, {
+      ...cookieOptions,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.cookie('refresh_token', result.refresh_token, {
+      ...cookieOptions,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+    return res.redirect('http://localhost:5173');
   }
 }

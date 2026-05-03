@@ -20,4 +20,8 @@ export class UpdateUserDto {
   @IsBoolean()
   @IsOptional()
   isVerified?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  googleId?: string;
 }

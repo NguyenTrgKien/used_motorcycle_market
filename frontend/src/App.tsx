@@ -8,6 +8,7 @@ import Account from "./pages/user/setting/Account";
 import Social from "./pages/user/setting/Social";
 import LoginTracking from "./pages/user/setting/LoginTracking";
 import GuardRoute from "./components/GuardRoute";
+import Address from "./pages/user/setting/Address";
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
         >
           <Route index path="profile" element={<Profile />} />
           <Route path="account" element={<Account />} />
+          <Route path="address" element={<Address />} />
           <Route path="social" element={<Social />} />
           <Route path="login-tracking" element={<LoginTracking />} />
         </Route>

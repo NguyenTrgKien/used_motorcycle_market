@@ -11,13 +11,13 @@ import { RegisterDto } from './dto/register.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { BlacklistToken } from '../blacklist_token/entities/blacklist_token.entity';
 import { DataSource, MoreThan, Repository } from 'typeorm';
-import { OAuth2Client } from 'google-auth-library';
 import { VerifyEmailDto } from './dto/verifyEmail.dto';
 import { UserVerification } from '../user_verification/entities/user_verification.entity';
 import { VerificationType } from '@project/shared';
 import { MailService } from '../mail/mail.service';
 import { ForgotPassDto } from './dto/forgotPass.dto';
 import { ResetPassDto } from './dto/resetPass.dto';
+import { GoogleUser } from './strategys/google.strategy';
 
 interface JwtPayload {
   exp: number;
@@ -25,8 +25,6 @@ interface JwtPayload {
   email: string;
   role: string;
 }
-
-const client = new OAuth2Client(process.env.CLIENT_ID);
 
 @Injectable()
 export class AuthService {
@@ -236,45 +234,28 @@ export class AuthService {
     return !!blacklisted;
   }
 
-  async verifyGoogleToken(token: string): Promise<JwtPayload | null> {
-    try {
-      const ticket = await client.verifyIdToken({
-        idToken: token,
-        audience: process.env.CLIENT_ID,
+  async findOrCreate(ggUser: GoogleUser) {
+    const { email } = ggUser;
+    if (!email) {
+      throw new BadRequestException('Google account has no email');
+    }
+    let user = await this.userService.findUserByEmail(email);
+    if (!user) {
+      user = await this.userService.create({
+        email,
+        fullName: ggUser.name,
+        avatar: ggUser.avatar,
+        googleId: ggUser.googleId,
       });
-      const payload = ticket.getPayload();
-      if (!payload) {
-        return null;
-      }
-      return {
-        sub: Number(payload['sub']),
-        email: payload['email']!,
-        role: 'user',
-      } as JwtPayload;
-    } catch (error) {
-      console.error('Error verifying Google token:', error);
-      return null;
     }
-  }
 
-  async loginGoogle(token: string): Promise<User | null> {
-    try {
-      const payload = await this.verifyGoogleToken(token);
-      if (!payload) {
-        throw new Error('Invalid Google token');
-      }
-      const email = payload.email;
-      let user = await this.userService.findUserByEmail(email);
-      if (!user) {
-        user = await this.userService.register({
-          email,
-          password: '',
-        });
-      }
-      return user;
-    } catch (error) {
-      console.error('Lỗi khi xác thực token Google:', error);
-      return null;
+    if (user && !user.googleId) {
+      const { data } = await this.userService.updateUser(user.id, {
+        googleId: ggUser.googleId,
+      });
+      user = data;
     }
+
+    return user;
   }
 }

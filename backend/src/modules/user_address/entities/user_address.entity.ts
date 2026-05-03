@@ -1,11 +1,13 @@
 import { User } from 'src/modules/user/entities/user.entity';
 import {
   Column,
+  CreateDateColumn,
   Entity,
   Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 
 @Index(['province', 'district'])
@@ -25,10 +27,16 @@ export class UserAddress {
   ward: string;
 
   @Column({ type: 'varchar', nullable: true, length: 255 })
-  address: string;
+  address?: string;
 
   @Index()
   @ManyToOne(() => User, (user) => user.address)
   @JoinColumn({ name: 'user_id' })
   user: User;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

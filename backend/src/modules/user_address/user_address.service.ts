@@ -1,26 +1,46 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { UserAddress } from './entities/user_address.entity';
+import { Repository } from 'typeorm';
 import { CreateUserAddressDto } from './dto/create-user_address.dto';
-import { UpdateUserAddressDto } from './dto/update-user_address.dto';
+import { User } from '../user/entities/user.entity';
+import { UserService } from '../user/user.service';
 
 @Injectable()
 export class UserAddressService {
-  create(createUserAddressDto: CreateUserAddressDto) {
-    return 'This action adds a new userAddress';
+  constructor(
+    @InjectRepository(UserAddress)
+    private readonly userAddressRepo: Repository<UserAddress>,
+    private readonly userService: UserService,
+  ) {}
+
+  async create(data: CreateUserAddressDto, userReq: User) {
+    const user = await this.userService.findUserById(userReq.id);
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy người dùng!');
+    }
+    const userAddress = this.userAddressRepo.create({
+      ...data,
+      user: {
+        id: user.id,
+      },
+    });
+    await this.userAddressRepo.save(userAddress);
+    return {
+      message: 'Thêm địa chỉ thành công!',
+      data: userAddress,
+    };
   }
 
-  findAll() {
-    return `This action returns all userAddress`;
-  }
-
-  findOne(id: number) {
-    return `This action returns a #${id} userAddress`;
-  }
-
-  update(id: number, updateUserAddressDto: UpdateUserAddressDto) {
-    return `This action updates a #${id} userAddress`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} userAddress`;
+  async getUserAddresses() {
+    const userAddresses = await this.userAddressRepo.find({
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+    return {
+      message: 'Thêm địa chỉ thành công!',
+      data: userAddresses,
+    };
   }
 }
