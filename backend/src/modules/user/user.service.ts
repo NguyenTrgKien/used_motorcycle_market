@@ -48,6 +48,7 @@ export class UserService {
       where: {
         id: userId,
       },
+      relations: ['addresses'],
       select: [],
     });
   }
@@ -163,6 +164,7 @@ export class UserService {
       const user = await this.userRepo.findOne({
         where: { id },
       });
+
       if (!user) {
         throw new NotFoundException('Không tìm thấy người dùng!');
       }
@@ -174,25 +176,24 @@ export class UserService {
         user.publicId = uploadResult.publicId;
       }
 
-      if (dataUpdate.email) {
-        user.email = dataUpdate.email;
-      }
-      if (dataUpdate.fullName) {
-        user.fullName = dataUpdate.fullName;
-      }
-      if (dataUpdate.phone) {
-        user.phone = dataUpdate.phone;
-      }
-
-      if (dataUpdate.isVerified) {
-        user.isVerified = dataUpdate.isVerified;
-      }
+      Object.keys(dataUpdate).forEach((key) => {
+        const k = key as keyof UpdateUserDto;
+        if (dataUpdate[key] !== undefined) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+          (user as any)[k] = dataUpdate[k];
+        }
+      });
 
       await this.userRepo.save(user);
-
+      const dataUser = await this.userRepo.findOne({
+        where: { id },
+      });
+      if (!dataUser) {
+        throw new NotFoundException('Không tìm thấy người dùng!');
+      }
       return {
         message: 'Cập nhật người dùng thành công!',
-        data: user,
+        data: dataUser,
       };
     } catch (error) {
       if (error instanceof NotFoundException) {

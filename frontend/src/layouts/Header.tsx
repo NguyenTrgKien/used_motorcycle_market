@@ -198,6 +198,7 @@ function Header() {
                     <img
                       src={user.avatar || avatar_default}
                       alt="Avatar"
+                      referrerPolicy="no-referrer"
                       className="w-full h-full rounded-full object-cover border border-gray-200"
                     />
                   </div>
@@ -220,6 +221,7 @@ function Header() {
                         <img
                           src={user.avatar || avatar_default}
                           alt="Avatar"
+                          referrerPolicy="no-referrer"
                           className="w-16 h-16 rounded-full object-cover shrink-0 border border-gray-200"
                         />
                         <div
@@ -391,6 +393,7 @@ function Header() {
                       <img
                         src={user.avatar || avatar_default}
                         alt="Avatar"
+                        referrerPolicy="no-referrer"
                         className="w-16 h-16 rounded-full object-cover shrink-0 border border-gray-200"
                       />
                       <div className="text-start min-w-0">

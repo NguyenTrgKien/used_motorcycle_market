@@ -13,10 +13,6 @@ export class UpdateUserDto {
   @IsOptional()
   phone?: string;
 
-  @IsString()
-  @IsOptional()
-  province?: string;
-
   @IsBoolean()
   @IsOptional()
   isVerified?: boolean;

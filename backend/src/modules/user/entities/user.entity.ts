@@ -75,7 +75,7 @@ export class User {
   updatedAt: Date;
 
   @OneToMany(() => UserAddress, (address) => address.user)
-  address: UserAddress[];
+  addresses: UserAddress[];
 
   @OneToMany(() => UserVerification, (verifications) => verifications.user)
   verifications: UserVerification[];

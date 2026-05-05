@@ -5,4 +5,5 @@ export interface UserAddressType {
   ward: string;
   address: string;
   user_id: number;
+  isDefault: boolean
 }

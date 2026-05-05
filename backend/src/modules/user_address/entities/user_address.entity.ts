@@ -1,4 +1,4 @@
-import { User } from 'src/modules/user/entities/user.entity';
+import { User } from '../../user/entities/user.entity';
 import {
   Column,
   CreateDateColumn,
@@ -29,8 +29,11 @@ export class UserAddress {
   @Column({ type: 'varchar', nullable: true, length: 255 })
   address?: string;
 
+  @Column({ default: false })
+  isDefault: boolean;
+
   @Index()
-  @ManyToOne(() => User, (user) => user.address)
+  @ManyToOne(() => User, (user) => user.addresses)
   @JoinColumn({ name: 'user_id' })
   user: User;
 

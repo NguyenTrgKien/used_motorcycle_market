@@ -3,6 +3,7 @@ import { useUser } from "../../../../hooks/useUser";
 import { faAdd, faAngleRight } from "@fortawesome/free-solid-svg-icons";
 import { useForm } from "react-hook-form";
 import logogg from "../../../../assets/images/google-logo.png";
+import { useState } from "react";
 
 interface UserInfoForm {
   fullName: string;
@@ -14,13 +15,16 @@ interface UserInfoForm {
 
 function Profile() {
   const { user } = useUser();
-  const {
-    control,
-    register,
-    handleSubmit,
-    setValue,
-    formState: { errors, isSubmitting },
-  } = useForm<UserInfoForm>();
+  const [isLoading, setIsLoading] = useState(false);
+  // const {
+  //   control,
+  //   register,
+  //   handleSubmit,
+  //   setValue,
+  //   formState: { errors, isSubmitting },
+  // } = useForm<UserInfoForm>();
+
+  const handleSave = async () => {};
 
   return (
     <div className="p-[2rem]">
@@ -91,6 +95,14 @@ function Profile() {
           )}
         </div>
       </div>
+      <button
+        type="button"
+        className="inline-block px-5 py-3 rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors duration-300 hover:cursor-pointer mt-10"
+        onClick={handleSave}
+        disabled={isLoading}
+      >
+        Lưu thay đổi
+      </button>
     </div>
   );
 }

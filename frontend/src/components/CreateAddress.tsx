@@ -1,12 +1,14 @@
 import { faClose } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { getAddresses } from "../apis/address";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import Select from "react-select";
 import { toast } from "react-toastify";
 import axiosInstance from "../configs/axiosInstance";
+import type { UserAddressType } from "../types/address.type";
+import { useEffect } from "react";
 
 interface AddressForm {
   province: string;
@@ -15,7 +17,13 @@ interface AddressForm {
   address?: string;
 }
 
-function CreateAddress({ onClose }: { onClose: () => void }) {
+interface CreateAddressProps {
+  action: "" | "create" | "edit";
+  dataUpdate: null | UserAddressType;
+  onClose: () => void;
+}
+
+function CreateAddress({ action, dataUpdate, onClose }: CreateAddressProps) {
   const {
     control,
     register,
@@ -23,6 +31,7 @@ function CreateAddress({ onClose }: { onClose: () => void }) {
     formState: { errors, isSubmitting },
     setValue,
     watch,
+    reset,
   } = useForm<AddressForm>({
     defaultValues: {
       province: "",
@@ -31,12 +40,23 @@ function CreateAddress({ onClose }: { onClose: () => void }) {
       address: "",
     },
   });
+  useEffect(() => {
+    if (action === "edit" && dataUpdate) {
+      reset({
+        province: dataUpdate.province || "",
+        district: dataUpdate.district || "",
+        ward: dataUpdate.ward || "",
+        address: dataUpdate.address || "",
+      });
+    }
+  }, [action, dataUpdate, reset]);
   const provinceSelected = useWatch({ control, name: "province" });
   const districtSelected = useWatch({ control, name: "district" });
   const { data: dataAddresses } = useQuery({
     queryKey: ["addresses"],
     queryFn: getAddresses,
   });
+  const queryClient = useQueryClient();
   const province = dataAddresses?.find((p: any) => p.name === provinceSelected);
   const districts = province?.districts || [];
   const district = districts.find((p: any) => p.name === districtSelected);
@@ -68,8 +88,27 @@ function CreateAddress({ onClose }: { onClose: () => void }) {
     },
   });
 
-  const onSubmit = (data: AddressForm) => {
-    createMutation.mutateAsync(data);
+  const updateMutation = useMutation({
+    mutationFn: (data: AddressForm) =>
+      axiosInstance.patch(`/api/v1/user-addresses/${dataUpdate?.id}`, data),
+    onSuccess: (res: any) => {
+      toast.success(res.data.message);
+    },
+    onError: (error: any) => {
+      toast.error(
+        error?.response?.data?.message || "Có lỗi xảy ra! Vui lòng thử lại.",
+      );
+    },
+  });
+
+  const onSubmit = async (data: AddressForm) => {
+    if (action === "create" && !dataUpdate) {
+      await createMutation.mutateAsync(data);
+    } else {
+      await updateMutation.mutateAsync(data);
+    }
+    queryClient.invalidateQueries({ queryKey: ["userAddresses"] });
+    onClose();
   };
 
   return (
@@ -222,11 +261,13 @@ function CreateAddress({ onClose }: { onClose: () => void }) {
             <button
               type="submit"
               disabled={isSubmitting || createMutation.isPending}
-              className="w-full h-[4.6rem] rounded-xl bg-yellow-500 text-white outline-none hover:bg-yellow-600 hover:cursor-pointer transition-colors duration-300"
+              className={`w-full h-[4.6rem] rounded-xl ${action === "edit" ? "bg-amber-500 hover:bg-yellow-600" : "bg-green-500 hover:bg-green-600"}  text-white outline-none  hover:cursor-pointer transition-colors duration-300`}
             >
               {isSubmitting || createMutation.isPending
                 ? "Đang xử lý..."
-                : "Thêm"}
+                : action === "edit"
+                  ? "Lưu"
+                  : "Thêm"}
             </button>
           </div>
         </form>

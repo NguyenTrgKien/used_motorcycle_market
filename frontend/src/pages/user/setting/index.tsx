@@ -1,6 +1,7 @@
 import {
   faCircleUser,
   faClock,
+  faEdit,
   faHeart,
   faLocationDot,
   faReceipt,
@@ -11,6 +12,9 @@ import {
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useUser } from "../../../hooks/useUser";
+import { useState } from "react";
+import ChangeAvatarModal from "../../../components/ChangeAvatarModal";
+import { AnimatePresence } from "framer-motion";
 
 const settingMenus = [
   {
@@ -53,6 +57,7 @@ const settingMenus = [
 
 function Setting() {
   const { user, isLoading } = useUser();
+  const [showChangeAvatar, setShowChangeAvatar] = useState(false);
   const location = useLocation();
   const path = location.pathname;
   const lastSegment = path.split("/").filter(Boolean).pop();
@@ -71,8 +76,25 @@ function Setting() {
           </div>
         ) : (
           <div className="text-center pb-[2rem] mb-[2rem] border-b border-b-gray-200">
-            <div className="w-[6rem] h-[6rem] rounded-full flex items-center justify-center bg-cyan-200 text-blue-800 font-semibold  mx-auto">
-              NT
+            <div className="relative w-[7rem] h-[7rem] mx-auto">
+              {user.avatar ? (
+                <img
+                  src={user.avatar}
+                  alt={`avatar-${user.fullName}`}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full rounded-full object-cover border border-gray-200 mx-auto"
+                />
+              ) : (
+                <div className="w-full h-full rounded-full flex items-center justify-center bg-cyan-200 text-blue-800 font-semibold  mx-auto">
+                  NT
+                </div>
+              )}
+              <button
+                className="absolute bottom-0 right-0 w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:cursor-pointer"
+                onClick={() => setShowChangeAvatar(true)}
+              >
+                <FontAwesomeIcon icon={faEdit} className="text-[1.2rem]" />
+              </button>
             </div>
             <p className="mt-2">{user.fullName}</p>
             <p>{user.phone}</p>
@@ -119,6 +141,12 @@ function Setting() {
       <div className="w-full flex-1 h-auto border border-gray-200 bg-white rounded-xl">
         <Outlet />
       </div>
+
+      <AnimatePresence>
+        {showChangeAvatar && (
+          <ChangeAvatarModal onClose={() => setShowChangeAvatar(false)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

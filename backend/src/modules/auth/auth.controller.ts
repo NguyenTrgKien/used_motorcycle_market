@@ -171,6 +171,8 @@ export class AuthController {
         role: user.role,
         isVerified: user.isVerified,
         googleId: user.googleId,
+        createdAt: user.createdAt,
+        addresses: user.addresses,
       },
     };
   }
