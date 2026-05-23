@@ -1,28 +1,35 @@
-export enum TargetType {
-  POST = "post",
-  USER = "user",
-}
+export const TargetType = {
+  POST: "post",
+  USER: "user",
+} as const;
 
-export enum ReasonType {
-  FAKE_INFO = "fake_info", // Thông tin xe không trung thực (km, năm sản xuất...)
-  WRONG_PRICE = "wrong_price", // Giá đăng không đúng thực tế
-  DUPLICATE_POST = "duplicate_post", // Đăng tin trùng lặp
-  ALREADY_SOLD = "already_sold", // Xe đã bán nhưng vẫn đăng tin
-  STOLEN_VEHICLE = "stolen_vehicle", // Nghi ngờ xe gian / xe trộm
-  FAKE_IMAGES = "fake_images", // Hình ảnh không phải xe thật
+export type TargetType =
+  (typeof TargetType)[keyof typeof TargetType];
 
-  // Liên quan đến người dùng
-  FRAUD = "fraud", // Lừa đảo, chiếm đoạt tiền
-  SPAM = "spam", // Spam tin nhắn
-  ABUSIVE = "abusive", // Ngôn từ xúc phạm, thô tục
-  SCAM = "scam", // Giả mạo người bán
+export const ReasonType = {
+  FAKE_INFO: "fake_info",
+  WRONG_PRICE: "wrong_price",
+  DUPLICATE_POST: "duplicate_post",
+  ALREADY_SOLD: "already_sold",
+  STOLEN_VEHICLE: "stolen_vehicle",
+  FAKE_IMAGES: "fake_images",
 
-  // Khác
-  OTHER = "other",
-}
+  FRAUD: "fraud",
+  SPAM: "spam",
+  ABUSIVE: "abusive",
+  SCAM: "scam",
 
-export enum ReportStatus {
-  PENDING = "pending",
-  RESOLVED = "resolved",
-  REJECTED = "rejected",
-}
+  OTHER: "other",
+} as const;
+
+export type ReasonType =
+  (typeof ReasonType)[keyof typeof ReasonType];
+
+export const ReportStatus = {
+  PENDING: "pending",
+  RESOLVED: "resolved",
+  REJECTED: "rejected",
+} as const;
+
+export type ReportStatus =
+  (typeof ReportStatus)[keyof typeof ReportStatus];
