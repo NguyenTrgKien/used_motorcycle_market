@@ -1,4 +1,4 @@
-import type { UserGender, UserRole, UserStatus } from "src/shared";
+import type { UserGender, UserRole, UserStatus } from "../shared";
 import type { UserAddressType } from "./address.type";
 
 export interface UserType {
