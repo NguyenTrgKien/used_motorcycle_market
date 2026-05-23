@@ -1,4 +1,4 @@
-import type { UserRole } from "@project/shared";
+import type { UserRole } from "src/shared";
 import type React from "react";
 import { useUser } from "../hooks/useUser";
 import FullscreenLoader from "./FullscreenLoader";
@@ -9,15 +9,25 @@ interface GuardRouteProps {
   children: React.ReactNode;
   requireAuth?: boolean;
   roles?: UserRole[];
+  requireUnVerified?: boolean;
 }
 
-function GuardRoute({ children, requireAuth, roles }: GuardRouteProps) {
+function GuardRoute({
+  children,
+  requireAuth,
+  roles,
+  requireUnVerified,
+}: GuardRouteProps) {
   const { user, isLoading } = useUser();
   const { openAuthModal } = useAuthModal();
   if (isLoading) return <FullscreenLoader />;
 
   if (requireAuth && !user) {
     openAuthModal();
+    return <Navigate to={"/"} replace />;
+  }
+
+  if (requireUnVerified && user?.isVerified) {
     return <Navigate to={"/"} replace />;
   }
 

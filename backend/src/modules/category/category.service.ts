@@ -11,7 +11,7 @@ import { Repository } from 'typeorm';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import slugify from 'slugify';
 import { UpdateCategoryDto } from './dto/update-category.dto';
-import { CategoryStatus } from '@project/shared';
+import { CategoryStatus } from 'src/shared';
 
 @Injectable()
 export class CategoryService {

@@ -5,14 +5,6 @@ export class UpdateUserDto {
   @IsOptional()
   fullName?: string;
 
-  @IsString()
-  @IsOptional()
-  email?: string;
-
-  @IsString()
-  @IsOptional()
-  phone?: string;
-
   @IsBoolean()
   @IsOptional()
   isVerified?: boolean;

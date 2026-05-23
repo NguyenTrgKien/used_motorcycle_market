@@ -55,6 +55,7 @@ function ChangeAvatarModal({ onClose }: ChangeAvatarModalProps) {
 
   const handleSubmit = async () => {
     if (!avatar) {
+      onClose();
       return;
     }
     const formData = new FormData();

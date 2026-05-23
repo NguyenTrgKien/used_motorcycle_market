@@ -1,4 +1,4 @@
-import { PostStatus } from '@project/shared';
+import { PostStatus } from 'src/shared';
 import { Category } from 'src/modules/category/entities/category.entity';
 import { Conversation } from 'src/modules/conversation/entities/conversation.entity';
 import { Motorcycle } from 'src/modules/motorcycle/entities/motorcycle.entity';

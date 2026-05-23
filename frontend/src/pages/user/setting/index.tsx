@@ -10,11 +10,14 @@ import {
   faUserGroup,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useUser } from "../../../hooks/useUser";
 import { useState } from "react";
 import ChangeAvatarModal from "../../../components/ChangeAvatarModal";
 import { AnimatePresence } from "framer-motion";
+import { toast } from "react-toastify";
+import axiosInstance from "../../../configs/axiosInstance";
+import FullscreenLoader from "../../../components/FullscreenLoader";
 
 const settingMenus = [
   {
@@ -61,6 +64,24 @@ function Setting() {
   const location = useLocation();
   const path = location.pathname;
   const lastSegment = path.split("/").filter(Boolean).pop();
+  const navigate = useNavigate();
+  const [isResend, setIsResend] = useState(false);
+
+  const handleSendOtp = async () => {
+    try {
+      setIsResend(true);
+      await axiosInstance.post("/api/v1/auth/resend-verification-otp");
+      navigate("/verify-account");
+      sessionStorage.setItem("pendingVerify", "true");
+    } catch (error: any) {
+      toast.error(
+        error.response?.data?.message ||
+          "Gửi mã thất bại, vui lòng thử lại sau",
+      );
+    } finally {
+      setIsResend(false);
+    }
+  };
 
   return (
     <div className="flex gap-[2rem] pt-[8.5rem] px-[15rem]">
@@ -99,9 +120,18 @@ function Setting() {
             <p className="mt-2">{user.fullName}</p>
             <p>{user.phone}</p>
             <div className="flex justify-center">
-              <span className="block px-6 py-2 text-[1.4rem] bg-green-100 text-green-700 rounded-full mt-2">
-                Chưa xác minh
-              </span>
+              {user?.isVerified ? (
+                <span className="block px-6 py-2 text-[1.4rem] bg-green-100 text-green-700 rounded-full mt-2">
+                  Đã xác minh
+                </span>
+              ) : (
+                <div
+                  className="block px-6 py-2 text-[1.4rem] bg-amber-100 text-amber-700 rounded-full mt-2 hover:bg-amber-200 transition-colors hover:cursor-pointer"
+                  onClick={handleSendOtp}
+                >
+                  Xác thực ngay
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -121,15 +151,17 @@ function Setting() {
           })}
           <h4 className="font-medium text-gray-500 mb-2 mt-[2rem]">Bảo mật</h4>
           <div>
+            {!user.googleId && (
+              <Link
+                to={"account"}
+                className={`flex items-center gap-4 py-6 px-5 ${lastSegment === "account" ? "bg-gray-100" : ""} rounded-lg hover:cursor-pointer text-gray-500`}
+              >
+                <FontAwesomeIcon icon={faUnlock} className="text-[1.8rem]" />
+                <span>Cài đặt tài khoản</span>
+              </Link>
+            )}
             <Link
-              to={""}
-              className={`flex items-center gap-4 py-6 px-5 ${lastSegment === "change-password" ? "bg-gray-100" : ""} rounded-lg hover:cursor-pointer text-gray-500`}
-            >
-              <FontAwesomeIcon icon={faUnlock} className="text-[1.8rem]" />
-              <span>Cài đặt tài khoản</span>
-            </Link>
-            <Link
-              to={""}
+              to={"security"}
               className={`flex items-center gap-4 py-6 px-5 ${lastSegment === "security" ? "bg-gray-100" : ""} rounded-lg hover:cursor-pointer text-gray-500`}
             >
               <FontAwesomeIcon icon={faShield} className="text-[1.8rem]" />
@@ -147,6 +179,8 @@ function Setting() {
           <ChangeAvatarModal onClose={() => setShowChangeAvatar(false)} />
         )}
       </AnimatePresence>
+
+      {isResend && <FullscreenLoader />}
     </div>
   );
 }

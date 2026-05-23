@@ -9,6 +9,7 @@ import Social from "./pages/user/setting/Social";
 import LoginTracking from "./pages/user/setting/LoginTracking";
 import GuardRoute from "./components/GuardRoute";
 import Address from "./pages/user/setting/Address";
+import VerifyAccount from "./pages/user/VerifyAcount";
 
 function App() {
   return (
@@ -16,7 +17,6 @@ function App() {
       <Route path="/" element={<MainLayout />}>
         <Route index element={<HomePage />} />
         <Route path="/about" element={<About />} />
-
         {/* setting */}
         <Route
           path="/setting"
@@ -33,6 +33,14 @@ function App() {
           <Route path="login-tracking" element={<LoginTracking />} />
         </Route>
       </Route>
+      <Route
+        path="/verify-account"
+        element={
+          <GuardRoute requireAuth={true} requireUnVerified={true}>
+            <VerifyAccount />
+          </GuardRoute>
+        }
+      />
     </Routes>
   );
 }

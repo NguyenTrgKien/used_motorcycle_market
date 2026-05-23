@@ -1,4 +1,4 @@
-import { MessageType } from '@project/shared';
+import { MessageType } from 'src/shared';
 import { Conversation } from 'src/modules/conversation/entities/conversation.entity';
 import { User } from 'src/modules/user/entities/user.entity';
 import {

@@ -2,7 +2,7 @@ import {
   MotorCondition,
   MotorFuelType,
   MotorTransmission,
-} from '@project/shared';
+} from 'src/shared';
 import { Post } from 'src/modules/post/entities/post.entity';
 import {
   Column,

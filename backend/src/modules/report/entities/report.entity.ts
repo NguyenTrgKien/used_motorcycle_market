@@ -1,4 +1,4 @@
-import { ReasonType, ReportStatus, TargetType } from '@project/shared';
+import { ReasonType, ReportStatus, TargetType } from 'src/shared';
 import { User } from 'src/modules/user/entities/user.entity';
 import {
   Column,

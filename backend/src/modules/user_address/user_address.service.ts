@@ -106,4 +106,22 @@ export class UserAddressService {
       data: userAddresses,
     };
   }
+
+  async deleteUserAddress(id: number) {
+    const userAddress = await this.userAddressRepo.findOne({
+      where: {
+        id,
+      },
+    });
+
+    if (!userAddress) {
+      throw new NotFoundException('Không địa chỉ!');
+    }
+
+    await this.userAddressRepo.delete(userAddress.id);
+
+    return {
+      message: 'Đã xóa địa chỉ người dùng!',
+    };
+  }
 }

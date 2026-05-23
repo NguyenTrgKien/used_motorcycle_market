@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -37,5 +38,10 @@ export class UserAddressController {
   getUserAddresses(@Req() req: RequestWithUser) {
     const user = req.user;
     return this.userAddressService.getUserAddresses(user);
+  }
+
+  @Delete('/:id')
+  deleteUserAddress(@Param('id', ParseIntPipe) id: number) {
+    return this.userAddressService.deleteUserAddress(id);
   }
 }

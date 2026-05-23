@@ -9,7 +9,7 @@ import { User } from './entities/user.entity';
 import { DataSource, Repository } from 'typeorm';
 import { RegisterDto } from '../auth/dto/register.dto';
 import { hashPass } from 'src/utils/handlePassword';
-import { UserRole, UserStatus, VerificationType } from '@project/shared';
+import { UserRole, UserStatus, VerificationType } from 'src/shared';
 import { nanoid } from 'nanoid';
 import { MailService } from '../mail/mail.service';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -84,7 +84,7 @@ export class UserService {
           ).toString();
           const expiredAt = new Date(Date.now() + 1000 * 60 * 5);
           await manager.save(UserVerification, {
-            type: VerificationType.EMAIL,
+            type: VerificationType.REGISTER_EMAIL,
             token: verifyToken,
             expiredAt,
             user: {
@@ -106,7 +106,7 @@ export class UserService {
       },
     );
     try {
-      await this.mailService.sendVerifyEmail(email, verifyToken);
+      await this.mailService.sendOtp(email, verifyToken);
     } catch (error) {
       console.log('Send mail failed', error);
     }
@@ -202,6 +202,26 @@ export class UserService {
       const err = error as Error;
       throw new InternalServerErrorException(`Lỗi server: ${err.message}`);
     }
+  }
+
+  async changeEmail(userId: number, newEmail: string) {
+    const user = await this.findUserById(userId);
+    if (!user) {
+      throw new NotFoundException('Người dùng không tồn tại!');
+    }
+    if (user.email === newEmail) {
+      throw new BadRequestException('Email mới trùng email hiện tại!');
+    }
+    const existEmail = await this.findUserByEmail(newEmail);
+    if (existEmail) {
+      throw new BadRequestException(
+        'Email đã được đăng ký bằng tài khoản khác.',
+      );
+    }
+
+    await this.userRepo.update(user.id, {
+      email: newEmail,
+    });
   }
 
   async updatePassword(email: string, newPassword: string) {

@@ -1,4 +1,4 @@
-import { UserGender, UserRole, UserStatus } from '@project/shared';
+import { UserGender, UserRole, UserStatus } from 'src/shared';
 import { Conversation } from 'src/modules/conversation/entities/conversation.entity';
 import { Message } from 'src/modules/message/entities/message.entity';
 import { Notification } from 'src/modules/notification/entities/notification.entity';

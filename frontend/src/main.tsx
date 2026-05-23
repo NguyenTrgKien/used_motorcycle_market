@@ -17,7 +17,7 @@ createRoot(document.getElementById("root")!).render(
         <QueryClientProvider client={queryClient}>
           <ReactQueryDevtools initialIsOpen={false} />
           <ToastContainer
-            position="top-right"
+            position="bottom-right"
             autoClose={1500}
             hideProgressBar={false}
             newestOnTop={false}

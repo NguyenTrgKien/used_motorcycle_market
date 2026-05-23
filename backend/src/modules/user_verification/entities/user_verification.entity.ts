@@ -1,4 +1,4 @@
-import { VerificationType } from '@project/shared';
+import { VerificationType } from 'src/shared';
 import { User } from 'src/modules/user/entities/user.entity';
 import {
   Column,
@@ -20,11 +20,14 @@ export class UserVerification {
   @Column({ type: 'enum', enum: VerificationType })
   type: VerificationType;
 
-  @Column({ unique: true })
+  @Column()
   token: string;
 
   @Column({ nullable: true })
   verifiedAt?: Date;
+
+  @Column({ type: 'json', nullable: true })
+  metadata: Record<string, unknown>;
 
   @Column()
   expiredAt: Date;

@@ -1,12 +1,11 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
   Post,
-  Query,
   Req,
   Request,
   Res,
@@ -23,6 +22,9 @@ import { ForgotPassDto } from './dto/forgotPass.dto';
 import { ResetPassDto } from './dto/resetPass.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { GoogleUser } from './strategys/google.strategy';
+import { ChangePassDto } from './dto/changePass.dto';
+import { ChangeEmailDto } from './dto/changeEmail.dto';
+import { VerifyChangeEmailOtpDto } from './dto/verifyChangeEmail.dto';
 
 export interface RequestWithUser extends Request {
   user: User;
@@ -77,6 +79,7 @@ export class AuthController {
     });
   }
 
+  // Register OTP
   @Public()
   @Post('/verify-email')
   async verifyEmail(@Body() data: VerifyEmailDto, @Res() res: Response) {
@@ -84,34 +87,93 @@ export class AuthController {
     return this.handleLogin(user, res);
   }
 
-  @Public()
-  @Get('/resend-otp')
-  resendOtp(@Query() query: { email: string }) {
-    if (!query.email) {
-      throw new BadRequestException('Vui lòng truyền email để gửi lại otp!');
-    }
-    return this.authService.resendOtp(query);
+  // Resend verify account otp
+  @Post('/resend-verification-otp')
+  resendVerificationOtp(@Req() req: RequestWithUser) {
+    const user = req.user;
+    return this.authService.resendVerificationOtp(user);
   }
 
+  // validate password and send otp
   @Public()
   @Post('/forgot-password')
-  @HttpCode(HttpStatus.OK)
   forgotPassword(@Body() data: ForgotPassDto) {
     return this.authService.forgotPassword(data);
   }
 
+  // Forgot password verify OTP
   @Public()
-  @Post('/verify-otp')
+  @Post('/verify-forgot-password-otp')
   @HttpCode(HttpStatus.OK)
-  verifyOtp(@Body() data: VerifyEmailDto) {
-    return this.authService.verifyOtp(data);
+  verifyForgotPassOtp(@Body() data: VerifyEmailDto) {
+    return this.authService.verifyForgotPassOtp(data);
   }
 
+  // Reset password after verify OTP forgot password
   @Public()
   @Post('/reset-password')
   @HttpCode(HttpStatus.OK)
   resetPassword(@Body() data: ResetPassDto) {
     return this.authService.resetPassword(data);
+  }
+
+  @Patch('/change-password')
+  @HttpCode(HttpStatus.OK)
+  async changePassword(
+    @Req() req: RequestWithUser,
+    @Body() data: ChangePassDto,
+    @Res() res: Response,
+  ) {
+    const user = req.user;
+    await this.authService.changePassword(user.id, data);
+
+    res.clearCookie('access_token', {
+      httpOnly: true,
+      // secure: true,
+      // sameSite: 'none',
+      secure: false,
+      sameSite: 'lax' as const,
+    });
+
+    res.clearCookie('refresh_token', {
+      httpOnly: true,
+      // secure: true,
+      // sameSite: 'none',
+      secure: false,
+      sameSite: 'lax' as const,
+    });
+
+    return res.json({
+      message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại!',
+    });
+  }
+
+  // validate email and send otp to change email
+  @Post('/email/change')
+  @HttpCode(HttpStatus.OK)
+  async requestChangeEmail(
+    @Body() data: ChangeEmailDto,
+    @Req() req: RequestWithUser,
+  ) {
+    const user = req.user;
+    return await this.authService.requestChangeEmail(user.id, data);
+  }
+
+  // Verify change email otp
+  @Post('/verify-change-email-otp')
+  @HttpCode(HttpStatus.OK)
+  verifyChangeEmailOtp(
+    @Body() data: VerifyChangeEmailOtpDto,
+    @Req() req: RequestWithUser,
+  ) {
+    const user = req.user;
+    return this.authService.verifyChangeEmailOtp(user, data);
+  }
+
+  @Post('/resend-change-email-otp')
+  resendChangeEmailOtp(@Req() req: RequestWithUser) {
+    const user = req.user;
+    return this.authService.resendChangeEmailOtp(user);
   }
 
   @Public()

@@ -1,4 +1,4 @@
-import { CategoryStatus } from '@project/shared';
+import { CategoryStatus } from 'src/shared';
 import { Post } from 'src/modules/post/entities/post.entity';
 import {
   Column,

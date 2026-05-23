@@ -1,11 +1,20 @@
-import { faAdd, faEdit, faTrashCan } from "@fortawesome/free-solid-svg-icons";
+import {
+  faAdd,
+  faCheck,
+  faEdit,
+  faTrashCan,
+} from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { AnimatePresence } from "framer-motion";
 import { useState } from "react";
 import CreateAddress from "../../../components/CreateAddress";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { getUserAddresses } from "../../../apis/address";
 import type { UserAddressType } from "../../../types/address.type";
+import { motion } from "framer-motion";
+import BottomBtn from "../../../components/BottomBtn";
+import axiosInstance from "../../../configs/axiosInstance";
+import { toast } from "react-toastify";
 
 function Address() {
   const [showAction, setShowAction] = useState<{
@@ -17,12 +26,35 @@ function Address() {
     action: "",
     dataUpdate: null,
   });
-
-  const { data: dataUserAddresses, isLoading } = useQuery({
+  const [showDelete, setShowDelete] = useState<number | null>(null);
+  const {
+    data: dataUserAddresses,
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ["userAddresses"],
     queryFn: getUserAddresses,
   });
   const userAddresses = dataUserAddresses?.data || [];
+
+  const deleteMutation = useMutation({
+    mutationFn: async () =>
+      await axiosInstance.delete(`/api/v1/user-addresses/${showDelete}`),
+    onSuccess: async (res) => {
+      toast.success(res?.data?.message);
+      await refetch();
+      setShowDelete(null);
+    },
+    onError: async (error: any) => {
+      toast.error(
+        error.response?.data?.message || "Đã có lỗi xảy ra. Vui lòng thử lại!",
+      );
+    },
+  });
+
+  const handleDelete = async () => {
+    await deleteMutation.mutate();
+  };
 
   return (
     <div className="p-[2rem]">
@@ -68,9 +100,14 @@ function Address() {
                   <p>
                     {address.ward}, {address.district}, {address.province}
                   </p>
+                  <div className="flex">
+                    <span className="text-cyan-500 text-[1.4rem] px-5 py-1 rounded-full bg-cyan-50 mt-2 block">
+                      Mặc định
+                    </span>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-2 text-[1.4rem]">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-4 text-[1.4rem]">
+                  <div className="flex items-center gap-4">
                     <button
                       className="px-5 py-2 rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors duration-300"
                       onClick={() =>
@@ -84,14 +121,17 @@ function Address() {
                       <FontAwesomeIcon icon={faEdit} />
                       Chỉnh sửa
                     </button>
-                    <button className="px-5 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors duration-300">
+                    <button
+                      className="px-5 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors duration-300 hover"
+                      onClick={() => setShowDelete(address.id)}
+                    >
                       <FontAwesomeIcon icon={faTrashCan} />
                       Xóa
                     </button>
                   </div>
-                  <button className="px-5 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors duration-300">
-                    <FontAwesomeIcon icon={faTrashCan} />
-                    Xóa
+                  <button className="px-5 py-2 rounded-lg border border-cyan-500 text-cyan-500 transition-colors duration-300 hover:border-cyan-700 hover:text-cyan-700 cursor-pointer">
+                    <FontAwesomeIcon icon={faCheck} />
+                    Mặc định
                   </button>
                 </div>
               </div>
@@ -113,6 +153,31 @@ function Address() {
               setShowAction({ open: false, action: "", dataUpdate: null })
             }
           />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showDelete && (
+          <div className="fixed inset-0 w-full h-full flex items-center justify-center bg-[#38383873] z-[100]">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="w-[90%] md:w-[50rem] lg:w-[50rem] p-10 h-auto bg-white shadow-xl rounded-2xl"
+            >
+              <h4 className="text-[1.8rem] font-medium w-full">
+                Bạn có chắc muốn xóa địa chỉ này?
+              </h4>
+              <BottomBtn
+                btnLeftTitle="Hủy"
+                btnRightTitle="Xóa"
+                handleCancel={() => setShowDelete(null)}
+                handleSubmit={handleDelete}
+                isLoading={deleteMutation.isPending}
+              />
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

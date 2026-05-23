@@ -37,7 +37,7 @@ function ForgotPass({ setStep }: ForgotPassProps) {
     complete: "form",
   };
 
-  const handleSendOtp = async () => {
+  const handleVerifyEmail = async () => {
     if (!email) {
       setErrMessage("Vui lòng nhập email của bạn!");
       return;
@@ -71,10 +71,13 @@ function ForgotPass({ setStep }: ForgotPassProps) {
     setErrMessage("");
     try {
       setIsLoading(true);
-      const res = await axiosInstance.post("/api/v1/auth/verify-otp", {
-        email: email,
-        otp,
-      });
+      const res = await axiosInstance.post(
+        "/api/v1/auth/verify-forgot-password-otp",
+        {
+          email: email,
+          otp,
+        },
+      );
       if (res.status === 200) {
         setStepForgot("reset");
       }
@@ -157,7 +160,7 @@ function ForgotPass({ setStep }: ForgotPassProps) {
           <button
             type="button"
             disabled={isLoading}
-            onClick={handleSendOtp}
+            onClick={handleVerifyEmail}
             className="w-full mt-2 h-[4.2rem] flex items-center justify-center bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors duration-300 cursor-pointer"
           >
             {isLoading ? "Đang xử lý..." : "Gửi mã xác nhận"}
