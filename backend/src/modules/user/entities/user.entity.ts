@@ -1,4 +1,9 @@
-import { UserGender, UserRole, UserStatus } from 'src/shared';
+import {
+  UserGender,
+  UserRole,
+  UserStatus,
+  UserTwoFactorMethod,
+} from 'src/shared';
 import { Conversation } from 'src/modules/conversation/entities/conversation.entity';
 import { Message } from 'src/modules/message/entities/message.entity';
 import { Notification } from 'src/modules/notification/entities/notification.entity';
@@ -19,6 +24,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { UserSession } from 'src/modules/user_session/entities/user_session.entity';
 
 @Entity('users')
 @Index(['status', 'role'])
@@ -49,6 +55,9 @@ export class User {
   @Column({ type: 'enum', enum: UserGender, nullable: true })
   gender?: UserGender;
 
+  @Column({ type: 'date', nullable: true })
+  birthday: Date;
+
   @Index()
   @Column({ type: 'enum', enum: UserRole, default: UserRole.USER })
   role: UserRole;
@@ -67,6 +76,15 @@ export class User {
 
   @Column({ nullable: true })
   facebookId?: string;
+
+  @Column({ nullable: true })
+  personalInfo?: string;
+
+  @Column({ default: false })
+  two_factor_enabled: boolean;
+
+  @Column({ type: 'enum', enum: UserTwoFactorMethod, nullable: true })
+  two_factor_method: UserTwoFactorMethod;
 
   @CreateDateColumn()
   createdAt: Date;
@@ -109,4 +127,7 @@ export class User {
 
   @OneToMany(() => Report, (report) => report.reporter)
   givenReports: Report[];
+
+  @OneToMany(() => UserSession, (user_session) => user_session.user)
+  user_session: UserSession[];
 }

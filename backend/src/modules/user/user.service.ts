@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  forwardRef,
+  Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -9,12 +11,18 @@ import { User } from './entities/user.entity';
 import { DataSource, Repository } from 'typeorm';
 import { RegisterDto } from '../auth/dto/register.dto';
 import { hashPass } from 'src/utils/handlePassword';
-import { UserRole, UserStatus, VerificationType } from 'src/shared';
+import {
+  UserRole,
+  UserStatus,
+  UserTwoFactorMethod,
+  VerificationType,
+} from 'src/shared';
 import { nanoid } from 'nanoid';
 import { MailService } from '../mail/mail.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { UserVerification } from '../user_verification/entities/user_verification.entity';
+import { UserAddressService } from '../user_address/user_address.service';
 
 @Injectable()
 export class UserService {
@@ -24,6 +32,8 @@ export class UserService {
     private readonly mailService: MailService,
     private readonly cloudinaryService: CloudinaryService,
     private readonly dataSource: DataSource,
+    @Inject(forwardRef(() => UserAddressService))
+    private readonly userAddressService: UserAddressService,
   ) {}
   async create(data: {
     email: string;
@@ -43,13 +53,52 @@ export class UserService {
     });
   }
 
+  async getMe(userId: number) {
+    const user = await this.findUserById(userId);
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy người dùng!');
+    }
+
+    return {
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        phone: user.phone,
+        email: user.email,
+        avatar: user.avatar,
+        role: user.role,
+        isGoogleLinked: Boolean(user.googleId),
+        isFaceBookLinked: Boolean(user.facebookId),
+        createdAt: user.createdAt,
+        addresses: user.addresses,
+        hasPassword: Boolean(user.password),
+      },
+    };
+  }
+
+  async getDataSecuritySetting(userId: number) {
+    const user = await this.findUserById(userId);
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy người dùng!');
+    }
+
+    const dataSecurity = {
+      isVerified: user.isVerified,
+      two_factor_enabled: user.two_factor_enabled,
+      two_factor_method: user.two_factor_method,
+    };
+
+    return {
+      security: dataSecurity,
+    };
+  }
+
   async findUserById(userId: number) {
     return await this.userRepo.findOne({
       where: {
         id: userId,
       },
       relations: ['addresses'],
-      select: [],
     });
   }
 
@@ -57,6 +106,16 @@ export class UserService {
     const user = await this.userRepo.findOne({
       where: {
         email,
+      },
+      relations: ['verifications'],
+    });
+    return user;
+  }
+
+  async findUserByPhone(phone: string) {
+    const user = await this.userRepo.findOne({
+      where: {
+        phone,
       },
       relations: ['verifications'],
     });
@@ -155,13 +214,34 @@ export class UserService {
     }
   }
 
-  async updateUser(
-    id: number,
-    dataUpdate: UpdateUserDto,
-    avatar?: Express.Multer.File,
-  ) {
-    try {
-      const user = await this.userRepo.findOne({
+  async updateAvatar(id: number, avatar?: Express.Multer.File) {
+    const user = await this.userRepo.findOne({
+      where: { id },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy người dùng!');
+    }
+
+    if (avatar) {
+      const uploadResult =
+        await this.cloudinaryService.uploadSingleFile(avatar);
+      user.avatar = uploadResult.url;
+      user.publicId = uploadResult.publicId;
+    }
+
+    await this.userRepo.save(user);
+
+    return {
+      message: 'Cập nhật avatar thành công!',
+    };
+  }
+
+  async updateUserBasic(id: number, dataUpdate: UpdateUserDto) {
+    return await this.dataSource.transaction(async (manager) => {
+      const { addressId, birthday, fullName, gender, personalInfo } =
+        dataUpdate;
+      const user = await manager.findOne(User, {
         where: { id },
       });
 
@@ -169,39 +249,57 @@ export class UserService {
         throw new NotFoundException('Không tìm thấy người dùng!');
       }
 
-      if (avatar) {
-        const uploadResult =
-          await this.cloudinaryService.uploadSingleFile(avatar);
-        user.avatar = uploadResult.url;
-        user.publicId = uploadResult.publicId;
-      }
-
-      Object.keys(dataUpdate).forEach((key) => {
-        const k = key as keyof UpdateUserDto;
-        if (dataUpdate[key] !== undefined) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-          (user as any)[k] = dataUpdate[k];
-        }
+      await manager.update(User, user.id, {
+        fullName,
+        gender,
+        personalInfo,
+        birthday,
       });
 
-      await this.userRepo.save(user);
-      const dataUser = await this.userRepo.findOne({
+      if (addressId) {
+        await this.userAddressService.setDefaultAddress(
+          user.id,
+          addressId,
+          manager,
+        );
+      }
+
+      const dataUser = await manager.findOne(User, {
         where: { id },
       });
       if (!dataUser) {
         throw new NotFoundException('Không tìm thấy người dùng!');
       }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password, ...rest } = dataUser;
       return {
         message: 'Cập nhật người dùng thành công!',
-        data: dataUser,
+        data: rest,
       };
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      const err = error as Error;
-      throw new InternalServerErrorException(`Lỗi server: ${err.message}`);
-    }
+    });
+  }
+
+  async updateVerify(userId: number, isVerified: boolean) {
+    await this.userRepo.update(userId, {
+      isVerified,
+    });
+  }
+
+  async updateSocialGoogle(userId: number, googleId: string) {
+    await this.userRepo.update(userId, {
+      googleId,
+    });
+  }
+
+  async update2fa(
+    userId: number,
+    isEnabled: boolean,
+    method?: UserTwoFactorMethod,
+  ) {
+    await this.userRepo.update(userId, {
+      two_factor_enabled: isEnabled,
+      ...(method ? { two_factor_method: method } : {}),
+    });
   }
 
   async changeEmail(userId: number, newEmail: string) {
@@ -221,6 +319,28 @@ export class UserService {
 
     await this.userRepo.update(user.id, {
       email: newEmail,
+    });
+  }
+
+  async changePhone(userId: number, newPhone: string) {
+    const user = await this.findUserById(userId);
+    if (!user) {
+      throw new NotFoundException('Người dùng không tồn tại!');
+    }
+    if (user.phone === newPhone) {
+      throw new BadRequestException(
+        'Số điện thoại mới trùng số điện thoại hiện tại!',
+      );
+    }
+    const existEmail = await this.findUserByPhone(newPhone);
+    if (existEmail) {
+      throw new BadRequestException(
+        'Số điện thoại đã được liên kết với tài khoản khác.',
+      );
+    }
+
+    await this.userRepo.update(user.id, {
+      phone: newPhone,
     });
   }
 

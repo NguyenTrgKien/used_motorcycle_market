@@ -14,7 +14,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 
 @Controller('users')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly userService: UserService) { }
 
   @Get('/')
   getAllUsers() {
@@ -26,14 +26,21 @@ export class UserController {
     return this.userService.getUserById(id);
   }
 
-  @Patch('/:id')
+  @Patch('/avatar/:id')
   @UseInterceptors(FileInterceptor('avatar'))
-  updateUser(
+  updateAvatar(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dataUpdate: UpdateUserDto,
     @UploadedFile() avatar: Express.Multer.File,
   ) {
-    return this.userService.updateUser(id, dataUpdate, avatar);
+    return this.userService.updateAvatar(id, avatar);
+  }
+
+  @Patch('/:id')
+  updateUserBasic(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dataUpdate: UpdateUserDto,
+  ) {
+    return this.userService.updateUserBasic(id, dataUpdate);
   }
 
   @Patch('/:id/ban')

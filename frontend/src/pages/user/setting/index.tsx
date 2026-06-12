@@ -6,7 +6,6 @@ import {
   faLocationDot,
   faReceipt,
   faShield,
-  faUnlock,
   faUserGroup,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -18,6 +17,7 @@ import { AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
 import axiosInstance from "../../../configs/axiosInstance";
 import FullscreenLoader from "../../../components/FullscreenLoader";
+import { useGetSecurity } from "./api/useGetSecurity";
 
 const settingMenus = [
   {
@@ -66,6 +66,9 @@ function Setting() {
   const lastSegment = path.split("/").filter(Boolean).pop();
   const navigate = useNavigate();
   const [isResend, setIsResend] = useState(false);
+
+  const { data: responseSecurity } = useGetSecurity();
+  const dataSecurity = responseSecurity?.security;
 
   const handleSendOtp = async () => {
     try {
@@ -120,7 +123,7 @@ function Setting() {
             <p className="mt-2">{user.fullName}</p>
             <p>{user.phone}</p>
             <div className="flex justify-center">
-              {user?.isVerified ? (
+              {dataSecurity?.isVerified ? (
                 <span className="block px-6 py-2 text-[1.4rem] bg-green-100 text-green-700 rounded-full mt-2">
                   Đã xác minh
                 </span>
@@ -151,15 +154,6 @@ function Setting() {
           })}
           <h4 className="font-medium text-gray-500 mb-2 mt-[2rem]">Bảo mật</h4>
           <div>
-            {!user.googleId && (
-              <Link
-                to={"account"}
-                className={`flex items-center gap-4 py-6 px-5 ${lastSegment === "account" ? "bg-gray-100" : ""} rounded-lg hover:cursor-pointer text-gray-500`}
-              >
-                <FontAwesomeIcon icon={faUnlock} className="text-[1.8rem]" />
-                <span>Cài đặt tài khoản</span>
-              </Link>
-            )}
             <Link
               to={"security"}
               className={`flex items-center gap-4 py-6 px-5 ${lastSegment === "security" ? "bg-gray-100" : ""} rounded-lg hover:cursor-pointer text-gray-500`}

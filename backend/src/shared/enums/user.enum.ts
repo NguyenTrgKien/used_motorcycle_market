@@ -18,7 +18,11 @@ export enum VerificationType {
   REGISTER_EMAIL = 'register_email',
   CHANGE_EMAIL = 'change_email',
   RESET_PASSWORD = 'reset_password',
-  PHONE_OTP = 'phone_otp',
+  ADD_PHONE = 'add_phone',
+  CHANGE_PHONE = 'change_phone',
+
+  ENABLE_2FA = 'enable_2fa',
+  DISABLE_2FA = 'disable_2fa',
 }
 
 export enum IdType {
@@ -31,4 +35,10 @@ export enum IdentityStatus {
   PROCESSING = 'processing',
   APPROVED = 'approved',
   REJECTED = 'rejected',
+}
+
+export enum UserTwoFactorMethod {
+  EMAIL = 'email',
+  SMS = 'sms',
+  AUTHENTICATOR = 'authenticator',
 }

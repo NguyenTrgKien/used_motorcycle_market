@@ -29,7 +29,6 @@ function VerifyOtpStep({
 
   return (
     <div className="p-8">
-      {/* TITLE */}
       <div className="text-center">
         <h3 className="text-[2.4rem] font-semibold text-gray-900">
           Xác thực OTP
@@ -45,17 +44,14 @@ function VerifyOtpStep({
         <p className="text-amber-600 font-medium mt-1">{value}</p>
       </div>
 
-      {/* OTP */}
       <div className="flex justify-center mt-10">
         <OtpInputFields otp={otp} setOtp={setOtp} style="small" />
       </div>
 
-      {/* EXPIRE */}
       <div className="text-center mt-6">
         <p className="text-gray-500">Mã OTP sẽ hết hạn sau 5 phút</p>
       </div>
 
-      {/* BUTTON */}
       <button
         type="button"
         onClick={onConfirm}
@@ -65,7 +61,6 @@ function VerifyOtpStep({
         {loading ? "Đang xác thực..." : "Xác nhận"}
       </button>
 
-      {/* RESEND */}
       <div className="flex items-center justify-center gap-2 mt-6 text-[1.5rem]">
         <span className="text-gray-500">Không nhận được mã?</span>
 

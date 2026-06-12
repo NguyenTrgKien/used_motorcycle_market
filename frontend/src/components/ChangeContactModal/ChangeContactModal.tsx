@@ -15,7 +15,7 @@ import VerifyOtpStep from "./steps/VerifyOtpStep";
 import VerifyPasswordStep from "./steps/VerifyPasswordStep";
 import SuccessStep from "./steps/SuccessStep";
 
-type ChangeContactType = "email" | "phone";
+type ChangeContactType = "" | "email" | "phone";
 
 type Step = "verifyPassword" | "contactInput" | "verifyOtp" | "success";
 
@@ -28,37 +28,36 @@ function ChangeContactModal({ type, onClose }: ChangeContactModalProps) {
   const { user } = useUser();
   const queryClient = useQueryClient();
 
+  const isLinkingPhone = type === "phone" && !user?.phone;
+
   const [step, setStep] = useState<Step>(
-    type === "phone" ? "verifyPassword" : "contactInput",
+    isLinkingPhone ? "contactInput" : "verifyPassword",
   );
 
   const [contactValue, setContactValue] = useState("");
   const [password, setPassword] = useState("");
-
   const [otp, setOtp] = useState<string[]>(Array(6).fill(""));
-
-  const [loading, setLoading] = useState(false);
 
   const inputRefs = useRef<Array<HTMLInputElement | null>>(Array(6).fill(null));
 
-  const { countdown, canResend, startCountdown } = useOtpCountdown({
+  const emailCountdown = useOtpCountdown({
     duration: 60,
-    storageKey: `change-contact-${type}`,
+    storageKey: "change-contact-email",
   });
 
+  const phoneCountdown = useOtpCountdown({
+    duration: 60,
+    storageKey: "change-contact-phone",
+  });
+
+  const { countdown, canResend, startCountdown } =
+    type === "email" ? emailCountdown : phoneCountdown;
+
   const currentTitle = useMemo(() => {
-    if (type === "email") {
-      return "Thay đổi email";
-    }
-
+    if (type === "email") return "Thay đổi email";
+    if (isLinkingPhone) return "Liên kết số điện thoại";
     return "Thay đổi số điện thoại";
-  }, [type]);
-
-  /*
-  ==================================================
-  VERIFY PASSWORD (PHONE ONLY)
-  ==================================================
-  */
+  }, [type, isLinkingPhone]);
 
   const verifyPasswordMutation = useMutation({
     mutationFn: async () => {
@@ -76,24 +75,17 @@ function ChangeContactModal({ type, onClose }: ChangeContactModalProps) {
     },
   });
 
-  /*
-  ==================================================
-  REQUEST EMAIL OTP
-  ==================================================
-  */
-
-  const requestEmailOtpMutation = useMutation({
+  const requestContactOtpMutation = useMutation({
     mutationFn: async () => {
-      return await axiosInstance.post("/api/v1/auth/email/change/request", {
-        newEmail: contactValue,
+      return await axiosInstance.post("/api/v1/auth/contact/change", {
+        contact: contactValue.trim(),
       });
     },
 
     onSuccess: (res: any) => {
       toast.success(res.data.message);
-
       startCountdown();
-
+      setOtp(Array(6).fill(""));
       setStep("verifyOtp");
     },
 
@@ -102,26 +94,19 @@ function ChangeContactModal({ type, onClose }: ChangeContactModalProps) {
     },
   });
 
-  /*
-  ==================================================
-  VERIFY EMAIL OTP
-  ==================================================
-  */
-
-  const verifyOtpMutation = useMutation({
+  const verifyContactOtpMutation = useMutation({
     mutationFn: async () => {
-      return await axiosInstance.post("/api/v1/auth/email/change/verify", {
-        otp: otp.join(""),
-      });
+      return await axiosInstance.post(
+        "/api/v1/auth/verify-change-contact-otp",
+        {
+          otp: otp.join("").trim(),
+        },
+      );
     },
 
     onSuccess: (res: any) => {
       toast.success(res.data.message);
-
-      queryClient.invalidateQueries({
-        queryKey: ["user"],
-      });
-
+      queryClient.invalidateQueries({ queryKey: ["user"] });
       setStep("success");
     },
 
@@ -130,82 +115,40 @@ function ChangeContactModal({ type, onClose }: ChangeContactModalProps) {
     },
   });
 
-  /*
-  ==================================================
-  CHANGE PHONE
-  ==================================================
-  */
-
-  const changePhoneMutation = useMutation({
-    mutationFn: async () => {
-      return await axiosInstance.patch("/api/v1/auth/phone", {
-        newPhone: contactValue,
-      });
-    },
-
-    onSuccess: (res: any) => {
-      toast.success(res.data.message);
-
-      queryClient.invalidateQueries({
-        queryKey: ["user"],
-      });
-
-      setStep("success");
-    },
-
-    onError: (error: any) => {
-      toast.error(
-        error?.response?.data?.message || "Không thể thay đổi số điện thoại",
-      );
-    },
+  const resendOtpMutation = useMutation({
+    mutationFn: async () =>
+      axiosInstance.post("/api/v1/auth/resend-change-contact-otp"),
   });
 
-  /*
-  ==================================================
-  HANDLERS
-  ==================================================
-  */
-
-  const handleVerifyPassword = async () => {
-    if (!password.trim()) {
-      return;
-    }
-
+  const handleVerifyPassword = () => {
+    if (!password.trim()) return;
     verifyPasswordMutation.mutate();
   };
 
-  const handleSubmitContact = async () => {
+  const handleSubmitContact = () => {
     if (!contactValue.trim()) {
       toast.error(
         type === "email"
           ? "Vui lòng nhập email"
           : "Vui lòng nhập số điện thoại",
       );
-
       return;
     }
 
     if (type === "email" && contactValue === user?.email) {
       toast.error("Email mới không được trùng email hiện tại");
-
       return;
     }
 
-    if (type === "phone" && contactValue === user?.phone) {
+    if (type === "phone" && !isLinkingPhone && contactValue === user?.phone) {
       toast.error("Số điện thoại mới không được trùng");
-
       return;
     }
 
-    if (type === "email") {
-      requestEmailOtpMutation.mutate();
-      return;
-    }
-
-    changePhoneMutation.mutate();
+    requestContactOtpMutation.mutate();
   };
 
-  const handleVerifyOtp = async () => {
+  const handleVerifyOtp = () => {
     const otpCode = otp.join("");
 
     if (otpCode.length !== 6) {
@@ -213,30 +156,31 @@ function ChangeContactModal({ type, onClose }: ChangeContactModalProps) {
       return;
     }
 
-    verifyOtpMutation.mutate();
+    verifyContactOtpMutation.mutate();
   };
 
   const handleResendOtp = async () => {
     if (!canResend) return;
 
     try {
-      setLoading(true);
-
-      await axiosInstance.post("/api/v1/auth/email/change/resend");
+      resendOtpMutation.mutate();
 
       setOtp(Array(6).fill(""));
-
       inputRefs.current[0]?.focus();
-
       startCountdown();
 
       toast.success("Đã gửi lại OTP");
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Không thể gửi lại OTP");
-    } finally {
-      setLoading(false);
     }
   };
+
+  const contactInputLoading = requestContactOtpMutation.isPending;
+  const verifyOtpLoading = verifyContactOtpMutation.isPending;
+  const isBusy =
+    verifyPasswordMutation.isPending ||
+    requestContactOtpMutation.isPending ||
+    verifyContactOtpMutation.isPending;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
@@ -247,7 +191,6 @@ function ChangeContactModal({ type, onClose }: ChangeContactModalProps) {
         transition={{ duration: 0.2 }}
         className="w-[92%] md:w-[50rem] bg-white rounded-2xl shadow-xl overflow-hidden"
       >
-        {/* HEADER */}
         <div className="flex items-center border-b border-gray-200 px-6 py-5">
           <div>
             <h2 className="text-[2rem] font-medium">{currentTitle}</h2>
@@ -259,16 +202,15 @@ function ChangeContactModal({ type, onClose }: ChangeContactModalProps) {
 
           <button
             onClick={onClose}
+            disabled={isBusy}
             className="ml-auto w-11 h-11 rounded-xl bg-gray-100 hover:bg-gray-200 transition-all"
           >
             <FontAwesomeIcon icon={faClose} />
           </button>
         </div>
 
-        {/* BODY */}
         <div className="h-auto">
           <AnimatePresence mode="wait">
-            {/* VERIFY PASSWORD */}
             {step === "verifyPassword" && (
               <motion.div
                 key="verifyPassword"
@@ -285,7 +227,6 @@ function ChangeContactModal({ type, onClose }: ChangeContactModalProps) {
               </motion.div>
             )}
 
-            {/* CONTACT INPUT */}
             {step === "contactInput" && (
               <motion.div
                 key="contactInput"
@@ -298,20 +239,19 @@ function ChangeContactModal({ type, onClose }: ChangeContactModalProps) {
                     value={contactValue}
                     onChange={setContactValue}
                     onSubmit={handleSubmitContact}
-                    loading={requestEmailOtpMutation.isPending}
+                    loading={contactInputLoading}
                   />
                 ) : (
                   <PhoneInputStep
                     value={contactValue}
                     onChange={setContactValue}
                     onSubmit={handleSubmitContact}
-                    loading={changePhoneMutation.isPending}
+                    loading={contactInputLoading}
                   />
                 )}
               </motion.div>
             )}
 
-            {/* VERIFY OTP */}
             {step === "verifyOtp" && (
               <motion.div
                 key="verifyOtp"
@@ -328,12 +268,11 @@ function ChangeContactModal({ type, onClose }: ChangeContactModalProps) {
                   canResend={canResend}
                   onResend={handleResendOtp}
                   onConfirm={handleVerifyOtp}
-                  loading={verifyOtpMutation.isPending}
+                  loading={verifyOtpLoading || resendOtpMutation.isPending}
                 />
               </motion.div>
             )}
 
-            {/* SUCCESS */}
             {step === "success" && (
               <motion.div
                 key="success"

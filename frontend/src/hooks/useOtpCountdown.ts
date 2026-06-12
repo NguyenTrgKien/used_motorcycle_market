@@ -39,7 +39,7 @@ export default function useOtpCountdown({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [countdown]);
+  }, [countdown, getRemainingTime]);
 
   return {
     countdown,

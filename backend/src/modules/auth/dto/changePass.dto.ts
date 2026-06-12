@@ -1,3 +1,4 @@
+import { OmitType } from '@nestjs/swagger';
 import { IsNotEmpty, IsString } from 'class-validator';
 
 export class ChangePassDto {
@@ -9,3 +10,7 @@ export class ChangePassDto {
   @IsNotEmpty({ message: 'Mật khẩu mới không được để trống' })
   newPassword!: string;
 }
+
+export class AddPasswordDto extends OmitType(ChangePassDto, [
+  'currentPassword',
+] as const) {}

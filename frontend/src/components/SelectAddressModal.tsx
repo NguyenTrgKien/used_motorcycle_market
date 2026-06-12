@@ -19,7 +19,14 @@ function SelectAddressModal({ setAddress, onClose }: SelectAddressModalProps) {
 
   const handleSelect = () => {
     if (select) {
-      setAddress(select);
+      const dataAddress = {
+        province: select.province,
+        district: select.district,
+        ward: select.ward,
+        address: select.address,
+        isDefault: select.isDefault,
+      } as UserAddressType;
+      setAddress(dataAddress);
     }
     onClose();
     return;

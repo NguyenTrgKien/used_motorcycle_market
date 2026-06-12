@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Route, Router, Routes } from "react-router-dom";
 import HomePage from "./pages/user/HomePage";
 import About from "./pages/user/About";
 import Setting from "./pages/user/setting";
@@ -10,6 +10,7 @@ import LoginTracking from "./pages/user/setting/LoginTracking";
 import GuardRoute from "./components/GuardRoute";
 import Address from "./pages/user/setting/Address";
 import VerifyAccount from "./pages/user/VerifyAcount";
+import Security from "./pages/user/setting/Security";
 
 function App() {
   return (
@@ -26,8 +27,11 @@ function App() {
             </GuardRoute>
           }
         >
+          <Route path="security">
+            <Route index element={<Security />} />
+            <Route path="password" element={<Account />} />
+          </Route>
           <Route index path="profile" element={<Profile />} />
-          <Route path="account" element={<Account />} />
           <Route path="address" element={<Address />} />
           <Route path="social" element={<Social />} />
           <Route path="login-tracking" element={<LoginTracking />} />

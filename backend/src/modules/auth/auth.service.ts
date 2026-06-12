@@ -11,18 +11,21 @@ import { JwtService } from '@nestjs/jwt';
 import { RegisterDto } from './dto/register.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { BlacklistToken } from '../blacklist_token/entities/blacklist_token.entity';
-import { DataSource, MoreThan, Repository } from 'typeorm';
+import { DataSource, In, MoreThan, Repository } from 'typeorm';
 import { VerifyEmailDto } from './dto/verifyEmail.dto';
 import { UserVerification } from '../user_verification/entities/user_verification.entity';
-import { VerificationType } from 'src/shared';
+import { UserTwoFactorMethod, VerificationType } from 'src/shared';
 import { MailService } from '../mail/mail.service';
 import { ForgotPassDto } from './dto/forgotPass.dto';
 import { ResetPassDto } from './dto/resetPass.dto';
 import { GoogleUser } from './strategys/google.strategy';
-import { ChangePassDto } from './dto/changePass.dto';
-import { ChangeEmailDto } from './dto/changeEmail.dto';
-import { VerifyChangeEmailOtpDto } from './dto/verifyChangeEmail.dto';
+import { AddPasswordDto, ChangePassDto } from './dto/changePass.dto';
+import { ChangeContactDto } from './dto/changeContact.dto';
+import { VerifyChangeContactOtpDto } from './dto/verifyChangeContact.dto';
 import { randomInt } from 'crypto';
+import { VerifyPasswordDto } from './dto/verify-password.dto';
+import { TwoFactorSendOtpDto } from './dto/two-factor-send-otp.dto';
+import { Verify2FaOtpDto } from './dto/verify-2fa-otp.dto';
 
 interface JwtPayload {
   exp: number;
@@ -109,6 +112,36 @@ export class AuthService {
     return this.userService.register(dataRegister);
   }
 
+  async verifyPassword(body: VerifyPasswordDto, userId: number) {
+    const { password } = body;
+    const user = await this.userService.findUserById(userId);
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy user!');
+    }
+
+    if (!user.password) {
+      throw new BadRequestException('Tài khoản chưa thiết lập mật khẩu!');
+    }
+
+    const isPasswordValid = await comparePass(password, user.password);
+
+    if (!isPasswordValid) {
+      throw new BadRequestException('Mật khẩu không chính xác!');
+    }
+
+    return {
+      message: 'Mật khẩu hợp lệ!',
+    };
+  }
+
+  async getMe(userId: number) {
+    return await this.userService.getMe(userId);
+  }
+
+  async getDataSecuritySetting(userId: number) {
+    return await this.userService.getDataSecuritySetting(userId);
+  }
+
   // Register verify email
   async verifyEmail(data: VerifyEmailDto) {
     const user = await this.userService.findUserByEmail(data.email);
@@ -142,7 +175,7 @@ export class AuthService {
       );
     }
 
-    await this.userService.updateUser(user.id, { isVerified: true });
+    await this.userService.updateVerify(user.id, true);
     await this.userVerifyRepo.delete(record.id);
     const userUpdated = await this.userService.findUserById(user.id);
     return userUpdated as User;
@@ -248,45 +281,110 @@ export class AuthService {
     return { message: 'Đặt lại mật khẩu thành công!' };
   }
 
-  // Validate email and send otp to new email
-  async requestChangeEmail(userId: number, data: ChangeEmailDto) {
+  isEmail(contact: string) {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test(contact);
+  }
+
+  // Validate email / phone and send otp to new email / phone
+  async requestChangeContact(userId: number, data: ChangeContactDto) {
     const user = await this.userService.findUserById(userId);
+
     if (!user) {
       throw new NotFoundException('Không tìm thấy người dùng!');
     }
 
-    if (user.email === data.newEmail) {
+    const { contact } = data;
+    const isEmail = this.isEmail(contact);
+
+    const latestOtp = await this.userVerifyRepo.findOne({
+      where: {
+        user: { id: user.id },
+        type: isEmail
+          ? VerificationType.CHANGE_EMAIL
+          : VerificationType.CHANGE_PHONE,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+    if (latestOtp && Date.now() - latestOtp.createdAt.getTime() < 60_000) {
+      throw new BadRequestException('Vui lòng chờ trước khi yêu cầu OTP mới!');
+    }
+
+    if (isEmail) {
+      if (user.email === contact) {
+        throw new BadRequestException(
+          'Email mới không được trùng với email hiện tại!',
+        );
+      }
+
+      const existingUser = await this.userService.findUserByEmail(contact);
+
+      if (existingUser) {
+        throw new BadRequestException('Email đã được đăng ký!');
+      }
+
+      await this.userVerifyRepo.delete({
+        user: { id: user.id },
+        type: VerificationType.CHANGE_EMAIL,
+      });
+
+      const { token } = await this.createVerificationOtp(
+        user.id,
+        VerificationType.CHANGE_EMAIL,
+        {
+          newEmail: contact,
+        },
+      );
+
+      try {
+        await this.mailService.sendOtp(contact, token);
+      } catch (error) {
+        console.error(error);
+
+        throw new InternalServerErrorException('Gửi email thất bại!');
+      }
+
+      return {
+        message: 'OTP đã gửi tới email mới!',
+      };
+    }
+
+    if (user.phone === contact) {
       throw new BadRequestException(
-        'Email mới không được trùng với email hiện tại!',
+        'Số điện thoại mới không được trùng với số điện thoại hiện tại!',
       );
     }
 
-    const { newEmail } = data;
-    const existEmail = await this.userService.findUserByEmail(newEmail);
-    if (existEmail) {
-      throw new BadRequestException('Email người dùng đã được đăng ký!');
+    const existingUser = await this.userService.findUserByPhone(contact);
+
+    if (existingUser) {
+      throw new BadRequestException('Số điện thoại đã được đăng ký!');
     }
+
+    await this.userVerifyRepo.delete({
+      user: { id: user.id },
+      type: VerificationType.CHANGE_PHONE,
+    });
 
     const { token } = await this.createVerificationOtp(
       user.id,
-      VerificationType.CHANGE_EMAIL,
+      VerificationType.CHANGE_PHONE,
       {
-        newEmail,
+        newPhone: contact,
       },
     );
-    try {
-      await this.mailService.sendOtp(newEmail, token);
-    } catch (error) {
-      console.log('Send mail failed ==============>', error);
-      throw new InternalServerErrorException('Gửi email thất bại!');
-    }
+
+    console.log('=============>', token);
     return {
-      message: 'OTP đã gửi tới email mới!',
+      message: 'OTP đã gửi tới số điện thoại!',
     };
   }
 
   // Verify otp new email
-  async verifyChangeEmailOtp(user: User, data: VerifyChangeEmailOtpDto) {
+  async verifyChangeContactOtp(user: User, data: VerifyChangeContactOtpDto) {
     const { otp } = data;
 
     const record = await this.userVerifyRepo.findOne({
@@ -295,72 +393,162 @@ export class AuthService {
           id: user.id,
         },
         token: otp,
-        type: VerificationType.CHANGE_EMAIL,
         expiredAt: MoreThan(new Date()),
       },
     });
-    console.log('==========>', record);
 
     if (!record) {
       throw new BadRequestException('OTP không đúng hoặc đã hết hạn!');
     }
 
-    const newEmail = record.metadata?.newEmail as string;
+    switch (record.type) {
+      case VerificationType.CHANGE_EMAIL: {
+        const newEmail = record.metadata?.newEmail;
 
-    if (!newEmail) {
-      throw new BadRequestException('Thiếu email mới trong OTP!');
+        if (typeof newEmail !== 'string') {
+          throw new BadRequestException('Thiếu email mới trong OTP!');
+        }
+
+        const existingUser = await this.userService.findUserByEmail(newEmail);
+
+        if (existingUser) {
+          throw new BadRequestException(
+            'Email đã được đăng ký với tài khoản khác!',
+          );
+        }
+
+        // update email
+        await this.userService.changeEmail(user.id, newEmail);
+
+        // delete OTP sau khi verify thành công
+        await this.userVerifyRepo.delete({
+          id: record.id,
+        });
+        break;
+      }
+      case VerificationType.CHANGE_PHONE: {
+        const newPhone = record.metadata?.newPhone;
+        if (typeof newPhone !== 'string') {
+          throw new BadRequestException('Thiếu số điện thoại mới trong OTP!');
+        }
+
+        const existingUser = await this.userService.findUserByPhone(newPhone);
+
+        if (existingUser) {
+          throw new BadRequestException(
+            'Số điện thoại đã được liên kết với tài khoản khác!',
+          );
+        }
+
+        await this.userService.changePhone(user.id, newPhone);
+
+        await this.userVerifyRepo.delete({
+          id: record.id,
+        });
+        break;
+      }
+      default:
+        throw new BadRequestException('OTP không hợp lệ!');
     }
 
-    // update email
-    await this.userService.changeEmail(user.id, newEmail);
-
-    // delete OTP sau khi verify thành công
     await this.userVerifyRepo.delete({
-      id: record.id,
+      user: {
+        id: user.id,
+      },
+      type: record.type,
     });
 
     return { message: 'Xác thực thành công!' };
   }
 
-  // resend change email otp
-  async resendChangeEmailOtp(user: User) {
+  // resend change contact otp
+  async resendChangeContactOtp(user: User) {
     const record = await this.userVerifyRepo.findOne({
       where: {
         user: {
           id: user.id,
         },
-        type: VerificationType.CHANGE_EMAIL,
+        type: In([
+          VerificationType.CHANGE_EMAIL,
+          VerificationType.CHANGE_PHONE,
+        ]),
+      },
+      order: {
+        createdAt: 'DESC',
       },
     });
+
     if (!record) {
-      throw new BadRequestException('Không có yêu cầu đổi email!');
+      throw new BadRequestException('Không có yêu cầu đổi!');
     }
 
     const cooldown = 60 * 1000;
-    if (
-      record.createdAt &&
-      Date.now() - record.createdAt.getTime() < cooldown
-    ) {
-      throw new BadRequestException('Vui lòng chờ trước khi gửi lại OTP!');
+    let expiredAtResult: null | Date = null;
+    let message = '';
+    switch (record.type) {
+      case VerificationType.CHANGE_EMAIL: {
+        if (
+          record.createdAt &&
+          Date.now() - record.createdAt.getTime() < cooldown
+        ) {
+          throw new BadRequestException('Vui lòng chờ trước khi gửi lại OTP!');
+        }
+
+        await this.userVerifyRepo.delete({
+          user: { id: user.id },
+          type: VerificationType.CHANGE_EMAIL,
+        });
+
+        const newEmail = record.metadata?.newEmail as string;
+        const { token, expiredAt } = await this.createVerificationOtp(
+          user.id,
+          VerificationType.CHANGE_EMAIL,
+          {
+            newEmail,
+          },
+        );
+        expiredAtResult = expiredAt;
+        try {
+          await this.mailService.sendOtp(newEmail, token);
+        } catch (error) {
+          console.log('Send mail failed=============>', error);
+          throw new InternalServerErrorException('Gửi email thất bại!');
+        }
+        message = 'OTP đã được gửi đến email!';
+        break;
+      }
+      case VerificationType.CHANGE_PHONE: {
+        const cooldown = 60 * 1000;
+        if (
+          record.createdAt &&
+          Date.now() - record.createdAt.getTime() < cooldown
+        ) {
+          throw new BadRequestException('Vui lòng chờ trước khi gửi lại OTP!');
+        }
+
+        await this.userVerifyRepo.delete({
+          user: { id: user.id },
+          type: VerificationType.CHANGE_PHONE,
+        });
+
+        const newPhone = record.metadata?.newPhone as string;
+        const { token, expiredAt } = await this.createVerificationOtp(
+          user.id,
+          VerificationType.CHANGE_PHONE,
+          {
+            newPhone,
+          },
+        );
+        expiredAtResult = expiredAt;
+        console.log('==============> SMS token', token, expiredAt);
+        message = 'OTP đã được gửi đến số điện thoại!';
+        break;
+      }
     }
 
-    const newEmail = record.metadata?.newEmail as string;
-    const { token, expiredAt } = await this.createVerificationOtp(
-      user.id,
-      VerificationType.CHANGE_EMAIL,
-      {
-        newEmail,
-      },
-    );
-    try {
-      await this.mailService.sendOtp(newEmail, token);
-    } catch (error) {
-      console.log('Send mail failed=============>', error);
-      throw new InternalServerErrorException('Gửi email thất bại!');
-    }
     return {
-      message: 'OTP mới đã được gửi về email!',
-      expiresAt: expiredAt,
+      message,
+      expiresAt: expiredAtResult,
     };
   }
 
@@ -375,6 +563,7 @@ export class AuthService {
     if (!user || !user.password) {
       throw new NotFoundException('Người dùng không tồn tại!');
     }
+
     const isMatch = await comparePass(currentPassword, user.password);
     if (!isMatch) {
       throw new BadRequestException('Mật khẩu hiện tại không đúng!');
@@ -382,6 +571,26 @@ export class AuthService {
 
     const hashed = await hashPass(newPassword);
     await this.userService.updatePassword(user.email, hashed);
+  }
+
+  async addPassword(userId: number, data: AddPasswordDto) {
+    const { newPassword } = data;
+    const user = await this.userService.findUserById(userId);
+
+    if (!user) {
+      throw new NotFoundException('Người dùng không tồn tại!');
+    }
+
+    if (user.password) {
+      throw new BadRequestException('Tài khoản người dùng đã có mật khẩu!');
+    }
+
+    const hashPassword = await hashPass(newPassword);
+    await this.userService.updatePassword(user.email, hashPassword);
+
+    return {
+      message: 'Thêm mật khẩu thành công!',
+    };
   }
 
   async addToBlacklist(token: string) {
@@ -419,12 +628,95 @@ export class AuthService {
     }
 
     if (user && !user.googleId) {
-      const { data } = await this.userService.updateUser(user.id, {
-        googleId: ggUser.googleId,
-      });
-      user = data;
+      await this.userService.updateSocialGoogle(user.id, ggUser.googleId);
     }
 
-    return user;
+    const newUser = await this.userService.findUserById(user.id);
+    if (!newUser) {
+      throw new NotFoundException('User not found!');
+    }
+    return newUser;
+  }
+
+  async twoFactorSendOtp(userId: number, body: TwoFactorSendOtpDto) {
+    const user = await this.userService.findUserById(userId);
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy người dùng!');
+    }
+    const { action, method } = body;
+
+    if (action === 'enable' && user.two_factor_enabled) {
+      throw new BadRequestException('2FA đã được bật!');
+    }
+
+    if (action === 'disable' && !user.two_factor_enabled) {
+      throw new BadRequestException('2FA đã được tắt!');
+    }
+
+    const tokenType =
+      action === 'enable'
+        ? VerificationType.ENABLE_2FA
+        : VerificationType.DISABLE_2FA;
+    const { token, expiredAt } = await this.createVerificationOtp(
+      user.id,
+      tokenType,
+    );
+
+    if (method === UserTwoFactorMethod.EMAIL) {
+      await this.mailService.send2FaOtp(user.email, token, action);
+    } else {
+      console.log('===>', token);
+    }
+
+    return {
+      message: `Đã gửi otp đến ${method === UserTwoFactorMethod.EMAIL ? 'email của bạn!' : 'SMS!'}`,
+      data: {
+        expiredAt,
+      },
+    };
+  }
+
+  async verify2FaOtp(userId: number, body: Verify2FaOtpDto) {
+    const user = await this.userService.findUserById(userId);
+
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy người dùng!');
+    }
+
+    const { otp, action, method } = body;
+
+    const verificationType =
+      action === 'enable'
+        ? VerificationType.ENABLE_2FA
+        : VerificationType.DISABLE_2FA;
+
+    const verification = await this.userVerifyRepo.findOne({
+      where: {
+        user: { id: userId },
+        token: otp,
+        type: verificationType,
+      },
+    });
+
+    if (!verification) {
+      throw new BadRequestException('Mã OTP không hợp lệ!');
+    }
+
+    if (verification.expiredAt < new Date()) {
+      throw new BadRequestException('Mã OTP đã hết hạn!');
+    }
+
+    if (action === 'enable') {
+      await this.userService.update2fa(user.id, true, method);
+      return {
+        message: 'Đã bật xác minh 2 bước!',
+      };
+    }
+
+    await this.userService.update2fa(user.id, false);
+
+    return {
+      message: 'Đã tắt xác minh 2 bước!',
+    };
   }
 }

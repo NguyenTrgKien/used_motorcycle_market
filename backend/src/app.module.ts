@@ -24,6 +24,7 @@ import { UserVerificationModule } from './modules/user_verification/user_verific
 import { UserIdentityModule } from './modules/user_identity/user_identity.module';
 import { AddressController } from './modules/address/address.controller';
 import { AddressModule } from './modules/address/address.module';
+import { UserSessionModule } from './modules/user_session/user_session.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { AddressModule } from './modules/address/address.module';
     UserVerificationModule,
     UserIdentityModule,
     AddressModule,
+    UserSessionModule,
   ],
   controllers: [AppController, AddressController],
   providers: [AppService],

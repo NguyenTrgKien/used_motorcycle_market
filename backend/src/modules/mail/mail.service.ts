@@ -109,4 +109,34 @@ export class MailService {
       html,
     });
   }
+
+  async send2FaOtp(email: string, otp: string, action: 'enable' | 'disable') {
+    const isEnable = action === 'enable';
+
+    await sgMail.send({
+      to: email,
+      from: process.env.SENDGRID_FROM_EMAIL!,
+      subject: isEnable
+        ? '[Bảo mật] Mã OTP bật xác thực 2 lớp'
+        : '[Bảo mật] Mã OTP tắt xác thực 2 lớp',
+      html: `
+        <div style="max-width:480px;margin:0 auto;font-family:sans-serif;color:#111;">
+          <h2 style="margin-bottom:8px;">Xác thực 2 lớp</h2>
+          <p style="color:#555;margin-bottom:24px;">
+            Yêu cầu <strong>${isEnable ? 'bật' : 'tắt'}</strong> xác thực 2 lớp cho tài khoản <strong>${email}</strong>.
+          </p>
+ 
+          <div style="background:#f5f5f5;border-radius:8px;padding:24px;text-align:center;margin-bottom:24px;">
+            <p style="font-size:12px;color:#888;margin-bottom:8px;letter-spacing:0.08em;">MÃ XÁC THỰC</p>
+            <span style="font-size:36px;font-weight:700;letter-spacing:0.2em;color:${isEnable ? '#059669' : '#dc2626'};">${otp}</span>
+            <p style="font-size:12px;color:#888;margin-top:8px;">Hết hạn sau <strong>5 phút</strong></p>
+          </div>
+ 
+          <p style="font-size:13px;color:#888;">
+            Nếu bạn không thực hiện yêu cầu này, hãy bỏ qua email này.
+          </p>
+        </div>
+      `,
+    });
+  }
 }

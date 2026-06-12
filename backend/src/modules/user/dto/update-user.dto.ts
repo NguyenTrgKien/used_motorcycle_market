@@ -1,15 +1,31 @@
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
+import { UserGender } from 'src/shared';
 
 export class UpdateUserDto {
   @IsString()
   @IsOptional()
   fullName?: string;
 
-  @IsBoolean()
+  @IsEnum(UserGender, { message: 'Giới tính không hợp lệ!' })
   @IsOptional()
-  isVerified?: boolean;
+  gender?: UserGender;
+
+  @IsDateString()
+  @IsOptional()
+  birthday?: string;
+
+  @IsNumber()
+  @IsOptional()
+  addressId?: number;
 
   @IsBoolean()
   @IsOptional()
-  googleId?: string;
+  personalInfo?: string;
 }

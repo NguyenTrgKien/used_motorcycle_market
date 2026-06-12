@@ -2,7 +2,7 @@ import { faClose } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { getAddresses } from "../apis/address";
+import { getAddresses } from "../apis/address.api";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import Select from "react-select";
 import { toast } from "react-toastify";
@@ -15,6 +15,7 @@ interface AddressForm {
   district: string;
   ward: string;
   address?: string;
+  isDefault?: boolean;
 }
 
 interface CreateAddressProps {
@@ -38,6 +39,7 @@ function CreateAddress({ action, dataUpdate, onClose }: CreateAddressProps) {
       district: "",
       ward: "",
       address: "",
+      isDefault: false,
     },
   });
   useEffect(() => {
@@ -47,6 +49,7 @@ function CreateAddress({ action, dataUpdate, onClose }: CreateAddressProps) {
         district: dataUpdate.district || "",
         ward: dataUpdate.ward || "",
         address: dataUpdate.address || "",
+        isDefault: dataUpdate.isDefault ?? false,
       });
     }
   }, [action, dataUpdate, reset]);
@@ -256,7 +259,17 @@ function CreateAddress({ action, dataUpdate, onClose }: CreateAddressProps) {
               className="w-full h-[4.6rem] rounded-xl border border-gray-300 px-6 outline-none"
               {...register("address")}
             />
+            <div className="w-full flex items-center gap-5">
+              <label className="text-gray-600">Đặt làm mặc định</label>
+              <input
+                type="checkbox"
+                style={{ scale: "1.5" }}
+                className="hover:cursor-pointer"
+                {...register("isDefault")}
+              />
+            </div>
           </div>
+
           <div className="w-full flex border-t border-t-gray-200 p-10">
             <button
               type="submit"

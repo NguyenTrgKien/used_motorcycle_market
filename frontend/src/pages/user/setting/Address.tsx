@@ -1,15 +1,10 @@
-import {
-  faAdd,
-  faCheck,
-  faEdit,
-  faTrashCan,
-} from "@fortawesome/free-solid-svg-icons";
+import { faAdd, faEdit, faTrashCan } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { AnimatePresence } from "framer-motion";
 import { useState } from "react";
 import CreateAddress from "../../../components/CreateAddress";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { getUserAddresses } from "../../../apis/address";
+import { getUserAddresses } from "../../../apis/address.api";
 import type { UserAddressType } from "../../../types/address.type";
 import { motion } from "framer-motion";
 import BottomBtn from "../../../components/BottomBtn";
@@ -129,10 +124,6 @@ function Address() {
                       Xóa
                     </button>
                   </div>
-                  <button className="px-5 py-2 rounded-lg border border-cyan-500 text-cyan-500 transition-colors duration-300 hover:border-cyan-700 hover:text-cyan-700 cursor-pointer">
-                    <FontAwesomeIcon icon={faCheck} />
-                    Mặc định
-                  </button>
                 </div>
               </div>
             );

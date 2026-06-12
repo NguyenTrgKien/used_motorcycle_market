@@ -22,9 +22,12 @@ import { ForgotPassDto } from './dto/forgotPass.dto';
 import { ResetPassDto } from './dto/resetPass.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { GoogleUser } from './strategys/google.strategy';
-import { ChangePassDto } from './dto/changePass.dto';
-import { ChangeEmailDto } from './dto/changeEmail.dto';
-import { VerifyChangeEmailOtpDto } from './dto/verifyChangeEmail.dto';
+import { AddPasswordDto, ChangePassDto } from './dto/changePass.dto';
+import { ChangeContactDto } from './dto/changeContact.dto';
+import { VerifyChangeContactOtpDto } from './dto/verifyChangeContact.dto';
+import { VerifyPasswordDto } from './dto/verify-password.dto';
+import { TwoFactorSendOtpDto } from './dto/two-factor-send-otp.dto';
+import { Verify2FaOtpDto } from './dto/verify-2fa-otp.dto';
 
 export interface RequestWithUser extends Request {
   user: User;
@@ -77,6 +80,16 @@ export class AuthController {
         role: user.role,
       },
     });
+  }
+
+  @Post('/verify-password')
+  @HttpCode(200)
+  async verifyPassword(
+    @Body() body: VerifyPasswordDto,
+    @Req() req: RequestWithUser,
+  ) {
+    const user = req.user;
+    return this.authService.verifyPassword(body, user.id);
   }
 
   // Register OTP
@@ -148,32 +161,39 @@ export class AuthController {
     });
   }
 
-  // validate email and send otp to change email
-  @Post('/email/change')
+  @Post('/add-password')
   @HttpCode(HttpStatus.OK)
-  async requestChangeEmail(
-    @Body() data: ChangeEmailDto,
+  async addPassword(@Req() req: RequestWithUser, @Body() data: AddPasswordDto) {
+    const user = req.user;
+    await this.authService.addPassword(user.id, data);
+  }
+
+  // validate email and send otp to change email
+  @Post('/contact/change')
+  @HttpCode(HttpStatus.OK)
+  async requestChangeContact(
+    @Body() data: ChangeContactDto,
     @Req() req: RequestWithUser,
   ) {
     const user = req.user;
-    return await this.authService.requestChangeEmail(user.id, data);
+    return await this.authService.requestChangeContact(user.id, data);
   }
 
   // Verify change email otp
-  @Post('/verify-change-email-otp')
+  @Post('/verify-change-contact-otp')
   @HttpCode(HttpStatus.OK)
-  verifyChangeEmailOtp(
-    @Body() data: VerifyChangeEmailOtpDto,
+  verifyChangeContactOtp(
+    @Body() data: VerifyChangeContactOtpDto,
     @Req() req: RequestWithUser,
   ) {
     const user = req.user;
-    return this.authService.verifyChangeEmailOtp(user, data);
+    return this.authService.verifyChangeContactOtp(user, data);
   }
 
-  @Post('/resend-change-email-otp')
-  resendChangeEmailOtp(@Req() req: RequestWithUser) {
+  @Post('/resend-change-contact-otp')
+  resendChangeContactOtp(@Req() req: RequestWithUser) {
     const user = req.user;
-    return this.authService.resendChangeEmailOtp(user);
+    return this.authService.resendChangeContactOtp(user);
   }
 
   @Public()
@@ -220,22 +240,23 @@ export class AuthController {
   }
 
   @Get('/me')
-  getMe(@Req() req: RequestWithUser) {
+  async getMe(@Req() req: RequestWithUser) {
     const user = req.user;
+    const result = await this.authService.getMe(user.id);
+
     return {
-      message: 'Đã đăng nhập!',
-      user: {
-        id: user.id,
-        fullName: user.fullName,
-        avatar: user.avatar,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        isVerified: user.isVerified,
-        googleId: user.googleId,
-        createdAt: user.createdAt,
-        addresses: user.addresses,
-      },
+      ...result,
+      message: 'Lấy thông tin cá nhân thành công!',
+    };
+  }
+
+  @Get('/security-settings')
+  async getDataSecuritySetting(@Req() req: RequestWithUser) {
+    const user = req.user;
+    const result = await this.authService.getDataSecuritySetting(user.id);
+    return {
+      ...result,
+      message: 'Lấy thông tin bảo mật thành công!',
     };
   }
 
@@ -270,5 +291,20 @@ export class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     return res.redirect('http://localhost:5173');
+  }
+
+  @Patch('/2fa/send-otp')
+  twoFactorSendOtp(
+    @Req() req: RequestWithUser,
+    @Body() body: TwoFactorSendOtpDto,
+  ) {
+    const userId = req.user.id;
+    return this.authService.twoFactorSendOtp(userId, body);
+  }
+
+  @Patch('/2fa/verify-otp')
+  verify2FaOtp(@Req() req: RequestWithUser, @Body() body: Verify2FaOtpDto) {
+    const userId = req.user.id;
+    return this.authService.verify2FaOtp(userId, body);
   }
 }

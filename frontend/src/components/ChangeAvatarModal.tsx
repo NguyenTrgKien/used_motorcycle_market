@@ -38,7 +38,7 @@ function ChangeAvatarModal({ onClose }: ChangeAvatarModalProps) {
 
   const submitMutation = useMutation({
     mutationFn: async (formData: FormData) =>
-      await axiosInstance.patch(`/api/v1/users/${user.id}`, formData, {
+      await axiosInstance.patch(`/api/v1/users/avatar/${user.id}`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },

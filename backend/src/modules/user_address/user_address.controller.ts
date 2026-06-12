@@ -41,7 +41,10 @@ export class UserAddressController {
   }
 
   @Delete('/:id')
-  deleteUserAddress(@Param('id', ParseIntPipe) id: number) {
-    return this.userAddressService.deleteUserAddress(id);
+  deleteUserAddress(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.userAddressService.deleteUserAddress(id, req.user.id);
   }
 }
