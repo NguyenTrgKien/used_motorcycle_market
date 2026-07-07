@@ -1,15 +1,18 @@
 import Header from "./Header";
 import Footer from "./Footer";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 
 function MainLayout() {
+  const location = useLocation();
+  const isMessagesPage = location.pathname.startsWith("/messages");
+
   return (
     <div className="bg-gray-100">
       <Header />
-      <main className="h-[180rem]">
+      <main>
         <Outlet />
       </main>
-      <Footer />
+      {!isMessagesPage && <Footer />}
     </div>
   );
 }

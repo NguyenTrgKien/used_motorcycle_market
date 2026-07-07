@@ -8,10 +8,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { RegisterDto } from '../auth/dto/register.dto';
 import { hashPass } from 'src/utils/handlePassword';
 import {
+  TargetType,
   UserRole,
   UserStatus,
   UserTwoFactorMethod,
@@ -23,6 +24,20 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { UserVerification } from '../user_verification/entities/user_verification.entity';
 import { UserAddressService } from '../user_address/user_address.service';
+import 'multer';
+import { UpdateUserPrivacyDto } from './dto/update-user-privacy.dto';
+import { UpdateCreatePostGuideDto } from './dto/update-create-post-guide.dto';
+import { Post } from '../post/entities/post.entity';
+import { PostImage } from '../post_image/entities/post_image.entity';
+import { Conversation } from '../conversation/entities/conversation.entity';
+import { Message } from '../message/entities/message.entity';
+import { Review } from '../review/entities/review.entity';
+import { Report } from '../report/entities/report.entity';
+import { SavedPost } from '../saved_post/entities/saved_post.entity';
+import { Notification } from '../notification/entities/notification.entity';
+import { UserAddress } from '../user_address/entities/user_address.entity';
+import { UserIdentity } from '../user_identity/entities/user_identity.entity';
+import { UserSession } from '../user_session/entities/user_session.entity';
 
 @Injectable()
 export class UserService {
@@ -72,6 +87,11 @@ export class UserService {
         createdAt: user.createdAt,
         addresses: user.addresses,
         hasPassword: Boolean(user.password),
+        hasSeenCreatePostGuide: user.hasSeenCreatePostGuide,
+        privacy: {
+          showEmail: user.showEmail,
+          showPhone: user.showPhone,
+        },
       },
     };
   }
@@ -86,6 +106,10 @@ export class UserService {
       isVerified: user.isVerified,
       two_factor_enabled: user.two_factor_enabled,
       two_factor_method: user.two_factor_method,
+      privacy: {
+        showEmail: user.showEmail,
+        showPhone: user.showPhone,
+      },
     };
 
     return {
@@ -182,7 +206,7 @@ export class UserService {
       });
       return {
         message: 'Lấy danh sách người dùng thành công!',
-        data: user || [],
+        data: user.map((item) => this.toPublicUser(item)),
       };
     } catch (error) {
       console.log(error);
@@ -205,7 +229,7 @@ export class UserService {
 
       return {
         message: 'Lấy thông tin người dùng thành công!',
-        data: user,
+        data: this.toPublicUser(user),
       };
     } catch (error) {
       console.log(error);
@@ -277,6 +301,42 @@ export class UserService {
         data: rest,
       };
     });
+  }
+
+  async updatePrivacy(userId: number, data: UpdateUserPrivacyDto) {
+    const user = await this.findUserById(userId);
+    if (!user) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y ngÆ°á»i dÃ¹ng!');
+    }
+
+    await this.userRepo.update(user.id, {
+      showEmail: data.showEmail,
+      showPhone: data.showPhone,
+    });
+
+    return {
+      message: 'Cáº­p nháº­t quyá»n riÃªng tÆ° thÃ nh cÃ´ng!',
+      privacy: {
+        showEmail: data.showEmail,
+        showPhone: data.showPhone,
+      },
+    };
+  }
+
+  async updateCreatePostGuide(userId: number, data: UpdateCreatePostGuideDto) {
+    const user = await this.findUserById(userId);
+    if (!user) {
+      throw new NotFoundException('Khong tim thay nguoi dung!');
+    }
+
+    await this.userRepo.update(user.id, {
+      hasSeenCreatePostGuide: data.hasSeenCreatePostGuide,
+    });
+
+    return {
+      message: 'Cap nhat trang thai huong dan dang tin thanh cong!',
+      hasSeenCreatePostGuide: data.hasSeenCreatePostGuide,
+    };
   }
 
   async updateVerify(userId: number, isVerified: boolean) {
@@ -354,6 +414,147 @@ export class UserService {
     });
   }
 
+  async deleteAccount(userId: number) {
+    await this.dataSource.transaction(async (manager) => {
+      const user = await manager.findOne(User, {
+        where: { id: userId },
+      });
+
+      if (!user) {
+        throw new NotFoundException('Khong tim thay nguoi dung!');
+      }
+
+      const posts = await manager.find(Post, {
+        where: { userId },
+        select: {
+          id: true,
+        },
+      });
+      const postIds = posts.map((post) => post.id);
+
+      await manager.delete(Message, { senderId: userId });
+
+      if (postIds.length > 0) {
+        const conversations = await manager.find(Conversation, {
+          where: { postId: In(postIds) },
+          select: { id: true },
+        });
+        const conversationIds = conversations.map(
+          (conversation) => conversation.id,
+        );
+
+        if (conversationIds.length > 0) {
+          await manager.delete(Message, { conversationId: In(conversationIds) });
+        }
+
+        await manager
+          .createQueryBuilder()
+          .delete()
+          .from(Review)
+          .where('postId IN (:...postIds)', { postIds })
+          .orWhere('reviewerId = :userId', { userId })
+          .orWhere('revieweeId = :userId', { userId })
+          .execute();
+
+        await manager
+          .createQueryBuilder()
+          .delete()
+          .from(Report)
+          .where('reporterId = :userId', { userId })
+          .orWhere('targetType = :userTargetType AND targetId = :userId', {
+            userTargetType: TargetType.USER,
+            userId,
+          })
+          .orWhere('targetType = :postTargetType AND targetId IN (:...postIds)', {
+            postTargetType: TargetType.POST,
+            postIds,
+          })
+          .execute();
+
+        await manager
+          .createQueryBuilder()
+          .delete()
+          .from(SavedPost)
+          .where('userId = :userId', { userId })
+          .orWhere('postId IN (:...postIds)', { postIds })
+          .execute();
+
+        await manager
+          .createQueryBuilder()
+          .delete()
+          .from(Conversation)
+          .where('buyerId = :userId', { userId })
+          .orWhere('sellerId = :userId', { userId })
+          .orWhere('postId IN (:...postIds)', { postIds })
+          .execute();
+
+        await manager.delete(PostImage, { postId: In(postIds) });
+        await manager.delete(Post, { id: In(postIds) });
+      } else {
+        await manager
+          .createQueryBuilder()
+          .delete()
+          .from(Review)
+          .where('reviewerId = :userId', { userId })
+          .orWhere('revieweeId = :userId', { userId })
+          .execute();
+
+        await manager
+          .createQueryBuilder()
+          .delete()
+          .from(Report)
+          .where('reporterId = :userId', { userId })
+          .orWhere('targetType = :userTargetType AND targetId = :userId', {
+            userTargetType: TargetType.USER,
+            userId,
+          })
+          .execute();
+
+        await manager.delete(SavedPost, { userId });
+
+        await manager
+          .createQueryBuilder()
+          .delete()
+          .from(Conversation)
+          .where('buyerId = :userId', { userId })
+          .orWhere('sellerId = :userId', { userId })
+          .execute();
+      }
+
+      await manager.delete(Notification, { userId });
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(UserAddress)
+        .where('user_id = :userId', { userId })
+        .execute();
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(UserVerification)
+        .where('user_id = :userId', { userId })
+        .execute();
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(UserSession)
+        .where('userId = :userId', { userId })
+        .execute();
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(UserIdentity)
+        .where('user_id = :userId', { userId })
+        .execute();
+      await manager.delete(User, userId);
+
+    });
+
+    return {
+      message: 'Xoa tai khoan thanh cong!',
+    };
+  }
+
   async banUser(id: number) {
     try {
       const user = await this.userRepo.findOne({
@@ -374,5 +575,15 @@ export class UserService {
       const err = error as Error;
       throw new InternalServerErrorException(`Lỗi server:  ${err.message}`);
     }
+  }
+
+  private toPublicUser(user: User) {
+    const publicUser = {
+      ...user,
+      email: user.showEmail ? user.email : null,
+      phone: user.showPhone ? user.phone : null,
+    };
+    delete publicUser.password;
+    return publicUser;
   }
 }

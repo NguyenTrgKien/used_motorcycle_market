@@ -75,7 +75,11 @@ function Header() {
   const { logout } = useAuth();
   const { isOpen, openAuthModal, closeAuthModal } = useAuthModal();
   const location = useLocation();
-  const isFixedHard = location.pathname.startsWith("/setting");
+  const isFixedHard =
+    location.pathname.startsWith("/setting") ||
+    location.pathname.startsWith("/users") ||
+    location.pathname.startsWith("/messages") ||
+    location.pathname.startsWith("/posts");
   const [showPopup, setShowPopup] = useState(false);
   const elementRef = useRef<HTMLDivElement>(null);
   const elementAreaRef = useRef<HTMLDivElement>(null);
@@ -177,12 +181,14 @@ function Header() {
               </span>
             </button>
             <button
+              onClick={() => navigate("/messages")}
               className={`hidden lg:flex items-center gap-1 px-5 h-[4rem] rounded-full ${!isFixed && !isFixedHard ? "bg-white text-gray-600" : "border border-gray-300"} hover:cursor-pointer`}
             >
               <FontAwesomeIcon icon={faCommentDots} />
-              <span>Liên hệ</span>
+              <span>Tin nhắn</span>
             </button>
             <button
+              onClick={() => navigate("/posts/manage")}
               className={`hidden lg:block px-5 h-[4rem] rounded-full ${!isFixed && !isFixedHard ? "bg-white text-gray-600" : "border border-gray-300"} hover:cursor-pointer`}
             >
               Quản lý tin
@@ -429,6 +435,10 @@ function Header() {
                       </div>
                     </div>
                     <div
+                      onClick={() => {
+                        navigate("/posts/manage");
+                        setShowMenuBar(false);
+                      }}
                       className={`flex items-center justify-between gap-2.5 px-8 hover:bg-gray-50 transition-colors duration-300 font-semibold hover:cursor-pointer `}
                     >
                       <div className="flex items-center gap-4">
@@ -439,10 +449,14 @@ function Header() {
                       </div>
                     </div>
                     <div
+                      onClick={() => {
+                        navigate("/messages");
+                        setShowMenuBar(false);
+                      }}
                       className={`flex items-center justify-between gap-2.5 px-8 hover:bg-gray-50 transition-colors duration-300 font-semibold hover:cursor-pointer `}
                     >
                       <div className="flex items-center gap-4">
-                        <p>Liên hệ</p>
+                        <p>Tin nhắn</p>
                       </div>
                     </div>
                   </div>

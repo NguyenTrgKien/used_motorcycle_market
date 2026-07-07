@@ -15,6 +15,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { UserVerification } from '../user_verification/entities/user_verification.entity';
 import { MailModule } from '../mail/mail.module';
 import { GoogleStrategy } from './strategys/google.strategy';
+import { UserSessionModule } from '../user_session/user_session.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { GoogleStrategy } from './strategys/google.strategy';
     }),
     TypeOrmModule.forFeature([BlacklistToken, UserVerification]),
     MailModule,
+    UserSessionModule,
   ],
   controllers: [AuthController],
   providers: [

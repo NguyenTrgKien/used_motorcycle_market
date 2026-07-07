@@ -26,12 +26,23 @@ import { randomInt } from 'crypto';
 import { VerifyPasswordDto } from './dto/verify-password.dto';
 import { TwoFactorSendOtpDto } from './dto/two-factor-send-otp.dto';
 import { Verify2FaOtpDto } from './dto/verify-2fa-otp.dto';
+import { VerifyLoginOtpDto } from './dto/verify-login-otp.dto';
+import { UserSessionService } from '../user_session/user_session.service';
 
 interface JwtPayload {
   exp: number;
   sub: number;
   email: string;
   role: string;
+  sessionId?: number;
+}
+
+export interface LoginDeviceInfo {
+  deviceName?: string;
+  browser?: string;
+  os?: string;
+  ipAddress?: string;
+  userAgent?: string;
 }
 
 @Injectable()
@@ -45,6 +56,7 @@ export class AuthService {
     private readonly userVerifyRepo: Repository<UserVerification>,
     private readonly mailService: MailService,
     private readonly dataSource: DataSource,
+    private readonly userSessionService: UserSessionService,
   ) {}
 
   private async createVerificationOtp(
@@ -88,17 +100,97 @@ export class AuthService {
     return null;
   }
 
-  login(user: User) {
+  async checkTwoFactorEnabled(userId: number) {
+    const user = await this.userService.findUserById(userId);
+    if (!user) {
+      throw new NotFoundException('Người dùng không tồn tại!');
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password, ...rest } = user;
+    return {
+      two_factor_enabled: rest.two_factor_enabled,
+      user: rest,
+    };
+  }
+
+  async sendOtpLogin(user: User) {
+    const { token, expiredAt } = await this.createVerificationOtp(
+      user.id,
+      VerificationType.LOGIN,
+    );
+    await this.mailService.sendLoginOtp(user.email, token);
+    return {
+      expiredAt,
+      message: 'Mã otp đã được gửi về!',
+      two_factor_enabled: true,
+      type: VerificationType.LOGIN,
+    };
+  }
+
+  async verifyLoginOtp(body: VerifyLoginOtpDto) {
+    const user = await this.userService.findUserByEmail(body.email);
+
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy người dùng');
+    }
+
+    const verification = await this.userVerifyRepo.findOne({
+      where: {
+        user: {
+          id: user.id,
+        },
+        type: VerificationType.LOGIN,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+    if (!verification) {
+      throw new BadRequestException('Không tìm thấy mã OTP');
+    }
+
+    if (verification.token !== body.otp) {
+      throw new BadRequestException('Mã OTP không chính xác');
+    }
+
+    if (verification.expiredAt < new Date()) {
+      throw new BadRequestException('Mã OTP đã hết hạn');
+    }
+
+    await this.userVerifyRepo.delete({
+      id: verification.id,
+    });
+
+    return user;
+  }
+
+  async login(user: User, deviceInfo?: LoginDeviceInfo) {
     const payload = {
       sub: user.id,
       email: user.email,
       role: user.role,
     };
 
-    const access_token = this.jwtService.sign(payload, { expiresIn: '7d' });
     const refresh_token = this.jwtService.sign(payload, { expiresIn: '7d' });
-    // const refreshTokenHash = await hashPass(refresh_token);
-    // await this.userService.saveRefreshToken(user.id, refreshTokenHash);
+    const refreshTokenPayload =
+      this.jwtService.decode<JwtPayload>(refresh_token);
+    const expiredAt =
+      refreshTokenPayload && typeof refreshTokenPayload.exp === 'number'
+        ? new Date(refreshTokenPayload.exp * 1000)
+        : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const session = await this.userSessionService.create(user.id, {
+      refreshToken: refresh_token,
+      expiredAt,
+      ...deviceInfo,
+    });
+    const access_token = this.jwtService.sign(
+      {
+        ...payload,
+        sessionId: session.id,
+      },
+      { expiresIn: '7d' },
+    );
 
     return {
       status: true,
@@ -110,6 +202,24 @@ export class AuthService {
 
   async register(dataRegister: RegisterDto) {
     return this.userService.register(dataRegister);
+  }
+
+  async refreshAccessToken(refreshToken: string) {
+    const session = await this.userSessionService.refresh(refreshToken);
+    const user = session.user;
+    const access_token = this.jwtService.sign(
+      {
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+        sessionId: session.id,
+      },
+      { expiresIn: '7d' },
+    );
+
+    return {
+      access_token,
+    };
   }
 
   async verifyPassword(body: VerifyPasswordDto, userId: number) {
@@ -140,6 +250,18 @@ export class AuthService {
 
   async getDataSecuritySetting(userId: number) {
     return await this.userService.getDataSecuritySetting(userId);
+  }
+
+  async deleteAccount(userId: number, accessToken?: string | null) {
+    await this.userService.deleteAccount(userId);
+
+    if (accessToken) {
+      await this.addToBlacklist(accessToken);
+    }
+
+    return {
+      message: 'Xoa tai khoan thanh cong!',
+    };
   }
 
   // Register verify email
@@ -218,7 +340,7 @@ export class AuthService {
       throw new NotFoundException('Không tìm thấy email!');
     }
 
-    if (user.googleId) {
+    if (user.googleId && !user.password) {
       throw new BadRequestException('Tài khoản đăng nhập bằng google!');
     }
 
@@ -226,6 +348,7 @@ export class AuthService {
       user.id,
       VerificationType.RESET_PASSWORD,
     );
+
     try {
       await this.mailService.sendOtp(email, token);
     } catch (error) {
@@ -252,6 +375,13 @@ export class AuthService {
         expiredAt: MoreThan(new Date()),
       },
     });
+
+    if (isValid) {
+      await this.userVerifyRepo.update(isValid.id, {
+        verifiedAt: new Date(),
+      });
+    }
+
     if (!isValid)
       throw new BadRequestException('OTP không đúng hoặc đã hết hạn!');
     return { message: 'Xác thực thành công!' };
@@ -264,17 +394,28 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException('Không tìm thấy email!');
     }
-    const isValid = await this.userVerifyRepo.findOne({
+    const verification = await this.userVerifyRepo.findOne({
       where: {
         user: {
           id: user.id,
         },
-        token: otp,
         type: VerificationType.RESET_PASSWORD,
         expiredAt: MoreThan(new Date()),
       },
+      order: {
+        createdAt: 'DESC',
+      },
     });
+    const isValid = verification;
     if (!isValid) throw new BadRequestException('Phiên xác thực hết hạn!');
+    if (otp) {
+      if (isValid.token !== otp) {
+        throw new BadRequestException('OTP khong hop le hoac da het han!');
+      }
+    } else if (!isValid.verifiedAt) {
+      throw new BadRequestException('Vui long xac thuc OTP truoc!');
+    }
+
     await this.userVerifyRepo.delete(isValid.id);
     const hashed = await hashPass(newPassword);
     await this.userService.updatePassword(email, hashed);
@@ -571,6 +712,7 @@ export class AuthService {
 
     const hashed = await hashPass(newPassword);
     await this.userService.updatePassword(user.email, hashed);
+    await this.userSessionService.revokeAllForUser(user.id);
   }
 
   async addPassword(userId: number, data: AddPasswordDto) {
@@ -610,6 +752,18 @@ export class AuthService {
       where: { token: token },
     });
     return !!blacklisted;
+  }
+
+  async revokeSessionByRefreshToken(refreshToken: string) {
+    return await this.userSessionService.revokeByRefreshToken(refreshToken);
+  }
+
+  async isSessionActive(sessionId: number, userId: number) {
+    return await this.userSessionService.isActive(sessionId, userId);
+  }
+
+  async touchSession(sessionId: number) {
+    return await this.userSessionService.touch(sessionId);
   }
 
   async findOrCreate(ggUser: GoogleUser) {

@@ -6,13 +6,19 @@ export interface UserType {
   fullName: string;
   email: string;
   phone: string;
+  privacy?: {
+    showEmail: boolean;
+    showPhone: boolean;
+  };
   avatar: string;
+  personalInfo?: string;
   gender: UserGender;
   role: UserRole;
   status: UserStatus;
   isVerified: boolean;
   isGoogleLinked: boolean;
   hasPassword: boolean;
+  hasSeenCreatePostGuide: boolean;
   addresses: UserAddressType[];
   createdAt: string;
   updatedAt: string;

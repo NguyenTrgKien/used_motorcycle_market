@@ -8,7 +8,16 @@ describe('UserSessionController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UserSessionController],
-      providers: [UserSessionService],
+      providers: [
+        {
+          provide: UserSessionService,
+          useValue: {
+            findUserSessions: jest.fn(),
+            revokeOtherSessions: jest.fn(),
+            revoke: jest.fn(),
+          },
+        },
+      ],
     }).compile();
 
     controller = module.get<UserSessionController>(UserSessionController);

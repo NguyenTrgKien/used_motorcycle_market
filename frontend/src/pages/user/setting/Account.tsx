@@ -39,6 +39,8 @@ function Account() {
   const [isValidPass, setIsValidPass] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const queryClient = useQueryClient();
+  const [isSubmitForgotPass, setIsSubmitForgotPass] = useState(false);
+
   const resetErr = () => {
     return setErrMessage({
       currentPassword: "",
@@ -49,7 +51,6 @@ function Account() {
 
   useEffect(() => {
     if (!confirmPassword) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setErrMessage((prev) => ({
         ...prev,
         confirmPassword: "",
@@ -164,7 +165,23 @@ function Account() {
     }
   };
 
-  const handleForgotPassword = () => {};
+  const handleForgotPassword = async () => {
+    try {
+      setIsSubmitForgotPass(true);
+      await axiosInstance.post("/api/v1/auth/forgot-password", {
+        email: user.email,
+      });
+      sessionStorage.setItem("otpMode", "forgot_password");
+      sessionStorage.setItem("forgotPassword", user.email);
+      navigate("/verify-otp");
+    } catch (error: any) {
+      toast.error(
+        error.response?.data?.message ?? "Có lỗi xảy ra! Vui lòng thử lại.",
+      );
+    } finally {
+      setIsSubmitForgotPass(false);
+    }
+  };
 
   return (
     <div className="p-[2rem]">
@@ -185,7 +202,7 @@ function Account() {
           Hãy thêm email trước khi thực hiện thao tác này
         </div>
       ) : (
-        !dataSecurity.isVerified && (
+        !dataSecurity?.isVerified && (
           <div className="mb-5 p-5 bg-orange-50 font-extralight text-amber-800">
             <FontAwesomeIcon icon={faWarning} className="pr-3" />
             Hãy xác thực tài khoản trước khi thực hiện thao tác này
@@ -311,8 +328,9 @@ function Account() {
           <button
             className="text-blue-500 hover:text-blue-600 transition-colors hover:cursor-pointer"
             onClick={handleForgotPassword}
+            disabled={isSubmitForgotPass}
           >
-            Quên mật khẩu?
+            {isSubmitForgotPass ? "Đang xử lý..." : "Quên mật khẩu?"}
           </button>
         )}
       </div>

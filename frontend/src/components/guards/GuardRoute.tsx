@@ -1,9 +1,9 @@
 import type React from "react";
-import { useUser } from "../hooks/useUser";
-import FullscreenLoader from "./FullscreenLoader";
+import { useUser } from "../../hooks/useUser";
+import FullscreenLoader from "../FullscreenLoader";
 import { Navigate } from "react-router-dom";
-import useAuthModal from "../hooks/useAuthModal";
-import type { UserRole } from "../shared";
+import useAuthModal from "../../hooks/useAuthModal";
+import type { UserRole } from "../../shared";
 
 interface GuardRouteProps {
   children: React.ReactNode;

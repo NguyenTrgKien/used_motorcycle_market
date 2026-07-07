@@ -23,6 +23,12 @@ export class PostImage {
   @Column({ nullable: true })
   publicId: string;
 
+  @Column({ type: 'int', default: 0 })
+  sortOrder: number;
+
+  @Column({ default: false })
+  isPrimary: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

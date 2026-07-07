@@ -1,12 +1,12 @@
 import { PostStatus } from 'src/shared';
 import { Category } from 'src/modules/category/entities/category.entity';
 import { Conversation } from 'src/modules/conversation/entities/conversation.entity';
-import { Motorcycle } from 'src/modules/motorcycle/entities/motorcycle.entity';
 import { PostImage } from 'src/modules/post_image/entities/post_image.entity';
 import { Report } from 'src/modules/report/entities/report.entity';
 import { Review } from 'src/modules/review/entities/review.entity';
 import { SavedPost } from 'src/modules/saved_post/entities/saved_post.entity';
 import { User } from 'src/modules/user/entities/user.entity';
+import { Vehicle } from 'src/modules/vehicle/entities/vehicle.entity';
 import {
   Column,
   CreateDateColumn,
@@ -24,6 +24,8 @@ import {
 @Index(['status', 'province'])
 @Index(['userId', 'status'])
 @Index(['categoryId', 'status'])
+@Index('IDX_posts_status_price', ['status', 'price'])
+@Index('IDX_posts_status_createdAt', ['status', 'createdAt'])
 export class Post {
   @PrimaryGeneratedColumn()
   id: number;
@@ -33,9 +35,6 @@ export class Post {
 
   @Column()
   categoryId: number;
-
-  @Column()
-  motorcycleId: number;
 
   @Column({ type: 'varchar' })
   title: string;
@@ -67,11 +66,29 @@ export class Post {
   @Column({ type: 'varchar', nullable: true, length: 100 })
   district?: string;
 
+  @Column({ type: 'varchar', nullable: true, length: 100 })
+  ward?: string;
+
+  @Column({ type: 'varchar', nullable: true, length: 255 })
+  addressDetail?: string;
+
   @Column({ unique: true })
   slug: string;
 
   @Column({ type: 'timestamp', nullable: true })
   expiredAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  approvedAt?: Date;
+
+  @Column({ nullable: true })
+  approvedBy?: number;
+
+  @Column({ type: 'varchar', nullable: true, length: 500 })
+  rejectedReason?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  soldAt?: Date;
 
   @CreateDateColumn()
   createdAt: Date;
@@ -86,9 +103,8 @@ export class Post {
   @OneToMany(() => PostImage, (post_image) => post_image.post)
   post_images: PostImage[];
 
-  @OneToOne(() => Motorcycle, (motorcycle) => motorcycle.post)
-  @JoinColumn({ name: 'motorcycleId' })
-  motorcycle: Motorcycle;
+  @OneToOne(() => Vehicle, (vehicle) => vehicle.post)
+  vehicle: Vehicle;
 
   @ManyToOne(() => Category, (category) => category.posts)
   @JoinColumn({ name: 'categoryId' })

@@ -1,34 +1,58 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Req,
+} from '@nestjs/common';
 import { ConversationService } from './conversation.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
-import { UpdateConversationDto } from './dto/update-conversation.dto';
+import type { RequestWithUser } from '../auth/auth.controller';
+import { CreateMessageDto } from '../message/dto/create-message.dto';
 
-@Controller('conversation')
+@Controller('conversations')
 export class ConversationController {
   constructor(private readonly conversationService: ConversationService) {}
 
-  @Post()
-  create(@Body() createConversationDto: CreateConversationDto) {
-    return this.conversationService.create(createConversationDto);
+  @Post('start')
+  start(
+    @Req() req: RequestWithUser,
+    @Body() createConversationDto: CreateConversationDto,
+  ) {
+    return this.conversationService.start(req.user.id, createConversationDto);
   }
 
   @Get()
-  findAll() {
-    return this.conversationService.findAll();
+  findAll(@Req() req: RequestWithUser) {
+    return this.conversationService.findAll(req.user.id);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.conversationService.findOne(+id);
+  @Get(':id/messages')
+  findMessages(
+    @Req() req: RequestWithUser,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.conversationService.findMessages(req.user.id, id);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateConversationDto: UpdateConversationDto) {
-    return this.conversationService.update(+id, updateConversationDto);
+  @Post(':id/messages')
+  createMessage(
+    @Req() req: RequestWithUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() createMessageDto: CreateMessageDto,
+  ) {
+    return this.conversationService.createMessage(
+      req.user.id,
+      id,
+      createMessageDto,
+    );
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.conversationService.remove(+id);
+  @Patch(':id/read')
+  markRead(@Req() req: RequestWithUser, @Param('id', ParseIntPipe) id: number) {
+    return this.conversationService.markRead(req.user.id, id);
   }
 }

@@ -20,3 +20,12 @@ export const getDataSecurity = async () => {
   const res = await axiosInstance.get("/api/v1/auth/security-settings");
   return res;
 };
+
+export const updateCreatePostGuideSeen = async (
+  hasSeenCreatePostGuide: boolean,
+) => {
+  const res = await axiosInstance.patch("/api/v1/users/create-post-guide", {
+    hasSeenCreatePostGuide,
+  });
+  return res.data;
+};

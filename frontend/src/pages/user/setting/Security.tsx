@@ -4,6 +4,9 @@ import {
   faAddressBook,
   faTriangleExclamation,
   faClose,
+  faDesktop,
+  faMobileScreen,
+  faRotateRight,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   faEnvelope,
@@ -18,13 +21,9 @@ import { toast } from "react-toastify";
 import axiosInstance from "../../../configs/axiosInstance";
 import ChangeContactModal from "../../../components/ChangeContactModal/ChangeContactModal";
 import { useUser } from "../../../hooks/useUser";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useGetSecurity } from "./api/useGetSecurity";
 import Manage2FAModal from "./components/Manage2FaModal";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
 
 type ContactModalType = "email" | "phone";
 
@@ -45,22 +44,81 @@ interface ToggleRowProps {
 interface Session {
   id: string | number;
   device: string;
-  location: string;
-  time: string;
+  browser?: string | null;
+  os?: string | null;
+  ipAddress?: string | null;
+  lastActiveLabel: string;
+  createdAtLabel: string;
   isCurrent: boolean;
+  isActive: boolean;
   isDesktop: boolean;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Sessions hooks
-// ─────────────────────────────────────────────────────────────────────────────
+interface UserSessionResponse {
+  id: number;
+  deviceName?: string | null;
+  browser?: string | null;
+  os?: string | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  expiredAt: string;
+  revokedAt?: string | null;
+  lastActive?: string | null;
+  createdAt: string;
+  isActive: boolean;
+  isCurrent: boolean;
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "Chưa ghi nhận";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Chưa ghi nhận";
+  return new Intl.DateTimeFormat("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function isDesktopSession(session: UserSessionResponse) {
+  const target = `${session.os ?? ""} ${session.userAgent ?? ""}`.toLowerCase();
+  if (target.includes("android") || target.includes("iphone")) return false;
+  return (
+    target.includes("windows") ||
+    target.includes("mac") ||
+    target.includes("linux")
+  );
+}
+
+function mapSession(session: UserSessionResponse): Session {
+  return {
+    id: session.id,
+    device:
+      session.deviceName ||
+      session.browser ||
+      session.os ||
+      "Thiết bị không xác định",
+    browser: session.browser,
+    os: session.os,
+    ipAddress: session.ipAddress,
+    lastActiveLabel: formatDateTime(session.lastActive ?? session.createdAt),
+    createdAtLabel: formatDateTime(session.createdAt),
+    isCurrent: session.isCurrent,
+    isActive: session.isActive,
+    isDesktop: isDesktopSession(session),
+  };
+}
 
 function useSessions() {
   return useQuery<Session[]>({
-    queryKey: ["sessions"],
+    queryKey: ["user-sessions"],
     queryFn: async () => {
-      const res = await axiosInstance.get("/api/v1/auth/sessions");
-      return res.data.data; // adjust to your response envelope
+      const res = await axiosInstance.get<{ data: UserSessionResponse[] }>(
+        "/api/v1/user-session",
+      );
+      return res.data.data.map(mapSession);
     },
   });
 }
@@ -69,9 +127,9 @@ function useRevokeSession() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string | number) =>
-      axiosInstance.delete(`/api/v1/auth/sessions/${id}`),
+      axiosInstance.delete(`/api/v1/user-session/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["user-sessions"] });
       toast.success("Đã đăng xuất thiết bị");
     },
     onError: (error: any) => {
@@ -85,9 +143,9 @@ function useRevokeSession() {
 function useRevokeAllSessions() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () => axiosInstance.delete("/api/v1/auth/sessions"),
+    mutationFn: async () => axiosInstance.delete("/api/v1/user-session/others"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["user-sessions"] });
       toast.success("Đã đăng xuất tất cả thiết bị khác");
     },
     onError: (error: any) => {
@@ -95,10 +153,6 @@ function useRevokeAllSessions() {
     },
   });
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared sub-components
-// ─────────────────────────────────────────────────────────────────────────────
 
 function SectionCard({
   icon,
@@ -150,13 +204,20 @@ function ToggleRow({ label, description, value, onChange }: ToggleRowProps) {
 
 function DeleteAccountModal({ onClose }: { onClose: () => void }) {
   const [confirmText, setConfirmText] = useState("");
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const CONFIRM_PHRASE = "XÓA TÀI KHOẢN";
 
   const mutation = useMutation({
     mutationFn: async () => axiosInstance.delete("/api/v1/auth/account"),
     onSuccess: () => {
+      queryClient.setQueryData(["user"], null);
+      queryClient.removeQueries({ queryKey: ["user"] });
+      queryClient.removeQueries({ queryKey: ["user-security"] });
+      queryClient.removeQueries({ queryKey: ["user-sessions"] });
+      onClose();
+      navigate("/");
       toast.success("Tài khoản đã được xóa");
-      // TODO: redirect / logout
     },
     onError: (error: any) => {
       toast.error(error?.response?.data?.message || "Không thể xóa tài khoản");
@@ -228,29 +289,47 @@ function DeleteAccountModal({ onClose }: { onClose: () => void }) {
 
 function Security() {
   const { user } = useUser();
+  const queryClient = useQueryClient();
 
-  // Modal states
   const [showContactModal, setShowContactModal] =
     useState<ContactModalType | null>(null);
   const [show2FAModal, setShow2FAModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  // 2FA
   const { data: responseSecurity } = useGetSecurity();
   const dataSecurity = responseSecurity?.security;
 
-  // Privacy
-  const [showEmail, setShowEmail] = useState(false);
-  const [showPhone, setShowPhone] = useState(true);
+  const [privacyOverride, setPrivacyOverride] = useState<{
+    showEmail: boolean;
+    showPhone: boolean;
+  } | null>(null);
+  const privacySettings = privacyOverride ??
+    dataSecurity?.privacy ?? {
+      showEmail: false,
+      showPhone: true,
+    };
+  const showEmail = Boolean(privacySettings.showEmail);
+  const showPhone = Boolean(privacySettings.showPhone);
 
-  const { data: sessions = [], isLoading: sessionsLoading } = useSessions();
+  const {
+    data: sessions = [],
+    isLoading: sessionsLoading,
+    isError: sessionsError,
+    refetch: refetchSessions,
+  } = useSessions();
   const revokeSessionMutation = useRevokeSession();
   const revokeAllMutation = useRevokeAllSessions();
 
   const privacyMutation = useMutation({
     mutationFn: async (payload: { showEmail: boolean; showPhone: boolean }) =>
       axiosInstance.patch("/api/v1/user/privacy", payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-security"] });
+      queryClient.invalidateQueries({ queryKey: ["user"] });
+      toast.success("Cập nhật quyền riêng tư thành công");
+    },
     onError: (error: any) => {
+      setPrivacyOverride(null);
       toast.error(
         error?.response?.data?.message || "Không thể cập nhật quyền riêng tư",
       );
@@ -265,8 +344,7 @@ function Security() {
       showEmail: field === "showEmail" ? value : showEmail,
       showPhone: field === "showPhone" ? value : showPhone,
     };
-    if (field === "showEmail") setShowEmail(value);
-    else setShowPhone(value);
+    setPrivacyOverride(next);
     privacyMutation.mutate(next);
   };
 
@@ -398,7 +476,7 @@ function Security() {
         </SectionCard>
 
         <SectionCard
-          icon={<span className="text-[1.8rem]">🖥️</span>}
+          icon={<FontAwesomeIcon icon={faDesktop} />}
           title="Phiên đăng nhập"
         >
           <p className="text-[1.4rem] text-gray-500 mb-4">
@@ -420,24 +498,50 @@ function Security() {
                 </div>
               ))}
             </div>
+          ) : sessionsError ? (
+            <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-4">
+              <p className="text-[1.4rem] text-red-600">
+                Không thể tải danh sách phiên đăng nhập
+              </p>
+              <button
+                onClick={() => void refetchSessions()}
+                className="mt-3 inline-flex items-center gap-2 text-[1.3rem] text-red-600 hover:text-red-700"
+              >
+                <FontAwesomeIcon icon={faRotateRight} />
+                Tải lại
+              </button>
+            </div>
+          ) : sessions.length === 0 ? (
+            <div className="rounded-xl bg-gray-50 px-4 py-4">
+              <p className="text-[1.4rem] text-gray-500">
+                Chưa có phiên đăng nhập nào được ghi nhận
+              </p>
+            </div>
           ) : (
             <>
               <div className="flex flex-col gap-2">
                 {sessions.map((session) => (
                   <div
                     key={session.id}
-                    className={`flex items-center justify-between px-4 py-3 rounded-xl ${session.isCurrent ? "bg-amber-50 border border-amber-100" : "bg-gray-50"}`}
+                    className={`flex items-center justify-between gap-4 px-4 py-3 rounded-xl ${session.isCurrent ? "bg-amber-50 border border-amber-100" : "bg-gray-50 border border-transparent"}`}
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="text-[2rem]">
-                        {session.isDesktop ? "💻" : "📱"}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-gray-500 shrink-0">
+                        <FontAwesomeIcon
+                          icon={session.isDesktop ? faDesktop : faMobileScreen}
+                        />
                       </span>
-                      <div>
-                        <p className="text-[1.4rem] font-medium text-gray-800">
+                      <div className="min-w-0">
+                        <p className="text-[1.4rem] font-medium text-gray-800 truncate">
                           {session.device}
                         </p>
                         <p className="text-[1.2rem] text-gray-400 mt-[2px]">
-                          {session.location} · {session.time}
+                          {session.ipAddress || "Không rõ IP"} · Hoạt động{" "}
+                          {session.lastActiveLabel}
+                        </p>
+                        <p className="text-[1.2rem] text-gray-400 mt-[2px]">
+                          {session.browser || "Không rõ trình duyệt"} ·{" "}
+                          {session.os || "Không rõ hệ điều hành"}
                         </p>
                       </div>
                     </div>
@@ -448,10 +552,16 @@ function Security() {
                     ) : (
                       <button
                         onClick={() => revokeSession(session.id)}
-                        disabled={revokeSessionMutation.isPending}
+                        disabled={
+                          revokeSessionMutation.isPending &&
+                          revokeSessionMutation.variables === session.id
+                        }
                         className="text-[1.3rem] px-4 py-[5px] rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors shrink-0 disabled:opacity-50"
                       >
-                        Đăng xuất
+                        {revokeSessionMutation.isPending &&
+                        revokeSessionMutation.variables === session.id
+                          ? "Đang xử lý..."
+                          : "Đăng xuất"}
                       </button>
                     )}
                   </div>

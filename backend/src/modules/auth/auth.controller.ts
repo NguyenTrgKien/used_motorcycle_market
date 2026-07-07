@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -12,9 +13,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { LocalAuthGuard } from './guards/local-auth.guard';
-import { AuthService } from './auth.service';
+import { AuthService, LoginDeviceInfo } from './auth.service';
 import { User } from '../user/entities/user.entity';
-import type { Request as ExpressRequest, Response } from 'express';
+import { type Request as ExpressRequest, type Response } from 'express';
 import { Public } from 'src/common/decorators/public.decorator';
 import { RegisterDto } from './dto/register.dto';
 import { VerifyEmailDto } from './dto/verifyEmail.dto';
@@ -28,11 +29,12 @@ import { VerifyChangeContactOtpDto } from './dto/verifyChangeContact.dto';
 import { VerifyPasswordDto } from './dto/verify-password.dto';
 import { TwoFactorSendOtpDto } from './dto/two-factor-send-otp.dto';
 import { Verify2FaOtpDto } from './dto/verify-2fa-otp.dto';
+import { VerifyLoginOtpDto } from './dto/verify-login-otp.dto';
 
-export interface RequestWithUser extends Request {
+export interface RequestWithUser extends ExpressRequest {
   user: User;
 }
-export interface GoogleUserRequest extends Request {
+export interface GoogleUserRequest extends ExpressRequest {
   user: GoogleUser;
 }
 @Controller('auth')
@@ -50,8 +52,8 @@ export class AuthController {
     };
   }
 
-  private handleLogin(user: User, res: Response) {
-    const result = this.authService.login(user);
+  private async handleLogin(user: User, res: Response, req?: ExpressRequest) {
+    const result = await this.authService.login(user, this.getDeviceInfo(req));
 
     const cookieOptions = {
       httpOnly: true,
@@ -79,7 +81,46 @@ export class AuthController {
         email: user.email,
         role: user.role,
       },
+      two_factor_enabled: false,
     });
+  }
+
+  private getDeviceInfo(req?: ExpressRequest): LoginDeviceInfo {
+    const userAgent = req?.get('user-agent') ?? undefined;
+    const forwardedFor = req?.get('x-forwarded-for');
+    const ipAddress = forwardedFor?.split(',')[0]?.trim() || req?.ip;
+    const browser = this.detectBrowser(userAgent);
+    const os = this.detectOs(userAgent);
+
+    return {
+      userAgent,
+      ipAddress,
+      browser,
+      os,
+      deviceName: [browser, os].filter(Boolean).join(' - ') || 'Unknown device',
+    };
+  }
+
+  private detectBrowser(userAgent?: string) {
+    if (!userAgent) return undefined;
+    if (userAgent.includes('Edg/')) return 'Microsoft Edge';
+    if (userAgent.includes('Chrome/')) return 'Chrome';
+    if (userAgent.includes('Firefox/')) return 'Firefox';
+    if (userAgent.includes('Safari/') && !userAgent.includes('Chrome/')) {
+      return 'Safari';
+    }
+    return 'Unknown browser';
+  }
+
+  private detectOs(userAgent?: string) {
+    if (!userAgent) return undefined;
+    if (userAgent.includes('Windows')) return 'Windows';
+    if (userAgent.includes('Android')) return 'Android';
+    if (userAgent.includes('iPhone') || userAgent.includes('iPad'))
+      return 'iOS';
+    if (userAgent.includes('Mac OS X')) return 'macOS';
+    if (userAgent.includes('Linux')) return 'Linux';
+    return 'Unknown OS';
   }
 
   @Post('/verify-password')
@@ -95,9 +136,13 @@ export class AuthController {
   // Register OTP
   @Public()
   @Post('/verify-email')
-  async verifyEmail(@Body() data: VerifyEmailDto, @Res() res: Response) {
+  async verifyEmail(
+    @Body() data: VerifyEmailDto,
+    @Res() res: Response,
+    @Req() req: ExpressRequest,
+  ) {
     const user = await this.authService.verifyEmail(data);
-    return this.handleLogin(user, res);
+    return this.handleLogin(user, res, req);
   }
 
   // Resend verify account otp
@@ -129,6 +174,13 @@ export class AuthController {
   resetPassword(@Body() data: ResetPassDto) {
     return this.authService.resetPassword(data);
   }
+
+  // @Public()
+  // @Post('/complete-reset-password')
+  // @HttpCode(HttpStatus.OK)
+  // compleResetPassword(@Body() data: CompleteResetPassDto) {
+  //   return this.authService.compleResetPassword(data);
+  // }
 
   @Patch('/change-password')
   @HttpCode(HttpStatus.OK)
@@ -199,23 +251,77 @@ export class AuthController {
   @Public()
   @UseGuards(LocalAuthGuard)
   @Post('/login')
-  login(@Request() req: RequestWithUser, @Res() res: Response) {
-    return this.handleLogin(req.user, res);
+  async login(@Request() req: RequestWithUser, @Res() res: Response) {
+    const userId = req.user.id;
+
+    const result = await this.authService.checkTwoFactorEnabled(userId);
+    if (result.two_factor_enabled) {
+      const otpResult = await this.authService.sendOtpLogin(result.user);
+      return res.status(HttpStatus.OK).json(otpResult);
+    } else {
+      return this.handleLogin(req.user, res, req as unknown as ExpressRequest);
+    }
+  }
+
+  @Public()
+  @Post('/verify-login-otp')
+  async verifyLoginOtp(
+    @Body() body: VerifyLoginOtpDto,
+    @Res() res: Response,
+    @Req() req: ExpressRequest,
+  ) {
+    const user = await this.authService.verifyLoginOtp(body);
+    return this.handleLogin(user, res, req);
+  }
+
+  @Public()
+  @Post('/refresh')
+  async refresh(@Req() req: ExpressRequest, @Res() res: Response) {
+    const cookies = req.cookies as Record<string, string>;
+    const refresh_token = cookies['refresh_token'] || null;
+
+    if (!refresh_token) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        status: false,
+        message: 'Phien dang nhap khong hop le',
+      });
+    }
+
+    const result = await this.authService.refreshAccessToken(refresh_token);
+
+    res.cookie('access_token', result.access_token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax' as const,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.json({
+      status: true,
+      message: 'Lam moi access token thanh cong',
+    });
   }
 
   @Post('/logout')
   async logout(@Req() req: ExpressRequest, @Res() res: Response) {
     const cookies = req.cookies as Record<string, string>;
     const access_token = cookies['access_token'] || null;
+    const refresh_token = cookies['refresh_token'] || null;
 
-    if (!access_token) {
+    if (!access_token && !refresh_token) {
       return res.json({
         status: true,
         message: 'Bạn chưa đăng nhập!',
       });
     }
 
-    await this.authService.addToBlacklist(access_token);
+    if (access_token) {
+      await this.authService.addToBlacklist(access_token);
+    }
+
+    if (refresh_token) {
+      await this.authService.revokeSessionByRefreshToken(refresh_token);
+    }
 
     res.clearCookie('access_token', {
       httpOnly: true,
@@ -261,6 +367,32 @@ export class AuthController {
   }
 
   // Cần cài thư viện passport-google-oauth20
+  @Delete('/account')
+  @HttpCode(HttpStatus.OK)
+  async deleteAccount(@Req() req: RequestWithUser, @Res() res: Response) {
+    const cookies = req.cookies as Record<string, string>;
+    const accessToken = cookies['access_token'] || null;
+    const user = req.user;
+
+    await this.authService.deleteAccount(user.id, accessToken);
+
+    res.clearCookie('access_token', {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax' as const,
+    });
+
+    res.clearCookie('refresh_token', {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax' as const,
+    });
+
+    return res.json({
+      message: 'Xoa tai khoan thanh cong!',
+    });
+  }
+
   @Public()
   @UseGuards(AuthGuard('google'))
   @Get('/login-google')
@@ -272,7 +404,10 @@ export class AuthController {
   async googleCallback(@Req() req: GoogleUserRequest, @Res() res: Response) {
     const user = req.user;
     const dataUser = await this.authService.findOrCreate(user);
-    const result = this.authService.login(dataUser);
+    const result = await this.authService.login(
+      dataUser,
+      this.getDeviceInfo(req),
+    );
     const cookieOptions = {
       httpOnly: true,
       // secure: true,

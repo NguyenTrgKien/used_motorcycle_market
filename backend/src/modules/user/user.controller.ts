@@ -5,16 +5,26 @@ import {
   Param,
   ParseIntPipe,
   Patch,
+  Req,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserPrivacyDto } from './dto/update-user-privacy.dto';
+import { UpdateCreatePostGuideDto } from './dto/update-create-post-guide.dto';
+import { type Request as ExpressRequest } from 'express';
+import { type User } from './entities/user.entity';
+import { Public } from 'src/common/decorators/public.decorator';
 
-@Controller('users')
+interface RequestWithUser extends ExpressRequest {
+  user: User;
+}
+
+@Controller(['users', 'user'])
 export class UserController {
-  constructor(private readonly userService: UserService) { }
+  constructor(private readonly userService: UserService) {}
 
   @Get('/')
   getAllUsers() {
@@ -22,6 +32,7 @@ export class UserController {
   }
 
   @Get('/:id')
+  @Public()
   getUserById(@Param('id', ParseIntPipe) id: number) {
     return this.userService.getUserById(id);
   }
@@ -33,6 +44,22 @@ export class UserController {
     @UploadedFile() avatar: Express.Multer.File,
   ) {
     return this.userService.updateAvatar(id, avatar);
+  }
+
+  @Patch('/privacy')
+  updatePrivacy(
+    @Req() req: RequestWithUser,
+    @Body() dataUpdate: UpdateUserPrivacyDto,
+  ) {
+    return this.userService.updatePrivacy(req.user.id, dataUpdate);
+  }
+
+  @Patch('/create-post-guide')
+  updateCreatePostGuide(
+    @Req() req: RequestWithUser,
+    @Body() dataUpdate: UpdateCreatePostGuideDto,
+  ) {
+    return this.userService.updateCreatePostGuide(req.user.id, dataUpdate);
   }
 
   @Patch('/:id')

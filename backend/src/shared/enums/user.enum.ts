@@ -15,6 +15,7 @@ export enum UserGender {
 }
 
 export enum VerificationType {
+  LOGIN = 'login',
   REGISTER_EMAIL = 'register_email',
   CHANGE_EMAIL = 'change_email',
   RESET_PASSWORD = 'reset_password',

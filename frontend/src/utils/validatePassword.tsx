@@ -49,8 +49,7 @@ function ValidatePassword({ password, setIsValid }: ValidatePasswordProps) {
 
     setIsValid(valid);
   }, [password, setIsValid]);
-  console.log('hello');
-  
+
   return (
     <div className="flex items-center gap-15 mt-5 text-[1.2rem]">
       <div className="space-y-5">

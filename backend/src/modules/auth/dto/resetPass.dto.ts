@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class ResetPassDto {
   @IsString()
@@ -6,8 +6,8 @@ export class ResetPassDto {
   email: string;
 
   @IsString()
-  @IsNotEmpty({ message: 'Vui lòng truyền otp!' })
-  otp: string;
+  @IsOptional()
+  otp?: string;
 
   @IsString()
   @IsNotEmpty({ message: 'Vui lòng truyền mật khẩu!' })

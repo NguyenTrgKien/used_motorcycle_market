@@ -6,7 +6,7 @@ import { MailModule } from './modules/mail/mail.module';
 import { DatabaseModule } from './database/database.module';
 import { UserModule } from './modules/user/user.module';
 import { CategoryModule } from './modules/category/category.module';
-import { MotorcycleModule } from './modules/motorcycle/motorcycle.module';
+import { VehicleModule } from './modules/vehicle/vehicle.module';
 import { PostModule } from './modules/post/post.module';
 import { PostImageModule } from './modules/post_image/post_image.module';
 import { ConversationModule } from './modules/conversation/conversation.module';
@@ -25,6 +25,7 @@ import { UserIdentityModule } from './modules/user_identity/user_identity.module
 import { AddressController } from './modules/address/address.controller';
 import { AddressModule } from './modules/address/address.module';
 import { UserSessionModule } from './modules/user_session/user_session.module';
+import { GeminiRateLimiterModule } from './modules/gemini-rate-limiter/gemini-rate-limiter.module';
 
 @Module({
   imports: [
@@ -33,7 +34,7 @@ import { UserSessionModule } from './modules/user_session/user_session.module';
     MailModule,
     UserModule,
     CategoryModule,
-    MotorcycleModule,
+    VehicleModule,
     PostModule,
     PostImageModule,
     ConversationModule,
@@ -51,6 +52,7 @@ import { UserSessionModule } from './modules/user_session/user_session.module';
     UserIdentityModule,
     AddressModule,
     UserSessionModule,
+    GeminiRateLimiterModule,
   ],
   controllers: [AppController, AddressController],
   providers: [AppService],

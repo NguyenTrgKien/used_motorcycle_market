@@ -30,7 +30,7 @@ function VerifyOtpStep({
   return (
     <div className="p-8">
       <div className="text-center">
-        <h3 className="text-[2.4rem] font-semibold text-gray-900">
+        <h3 className="text-[2.2rem] font-semibold text-gray-900">
           Xác thực OTP
         </h3>
 

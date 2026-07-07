@@ -10,6 +10,7 @@ export interface JwtPayload {
   sub: string;
   email: string;
   role: string;
+  sessionId?: number;
 }
 
 @Injectable()
@@ -49,6 +50,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
     const user = await this.userService.findUserById(Number(payload.sub));
     if (!user) throw new UnauthorizedException('Người dùng không tồn tại!');
+    if (payload.sessionId) {
+      const isSessionActive = await this.authService.isSessionActive(
+        payload.sessionId,
+        user.id,
+      );
+      if (!isSessionActive) {
+        throw new UnauthorizedException('Phien dang nhap da het han hoac bi thu hoi');
+      }
+      await this.authService.touchSession(payload.sessionId);
+    }
     return {
       ...user,
     };

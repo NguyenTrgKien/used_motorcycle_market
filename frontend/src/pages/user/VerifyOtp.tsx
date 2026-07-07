@@ -1,17 +1,21 @@
 import { faShield } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useUser } from "../../hooks/useUser";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import axiosInstance from "../../configs/axiosInstance";
 import { useNavigate } from "react-router-dom";
 import OtpInputFields from "../../components/OtpInputFields";
 import useOtpCountdown from "../../hooks/useOtpCountdown";
 
-function VerifyAccount() {
+type OtpMode = "verify" | "forgot_password";
+
+function VerifyOtp() {
   const { user } = useUser();
   const navigate = useNavigate();
   const [otp, setOtp] = useState<string[]>(Array(6).fill(""));
+  const [mode, setMode] = useState<OtpMode>("verify");
+  const [forgotEmail, setForgotEmail] = useState<string>("");
   const { countdown, canResend, startCountdown } = useOtpCountdown({
     duration: 60,
     storageKey: "otpCountdown",
@@ -19,8 +23,24 @@ function VerifyAccount() {
   const [canSubmit, setCanSubmit] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const isNavigating = useRef(false);
 
   useEffect(() => {
+    if (isNavigating.current) return;
+
+    const otpMode = sessionStorage.getItem("otpMode") as OtpMode | null;
+
+    if (otpMode === "forgot_password") {
+      const email = sessionStorage.getItem("forgotPassword");
+      if (!email) {
+        navigate("/");
+        return;
+      }
+      setMode("forgot_password");
+      setForgotEmail(email);
+      return;
+    }
+
     const pending = sessionStorage.getItem("pendingVerify");
     if (!pending) {
       navigate("/");
@@ -34,7 +54,6 @@ function VerifyAccount() {
 
   useEffect(() => {
     const existing = localStorage.getItem("otpCountdown");
-
     if (!existing) {
       startCountdown();
     }
@@ -49,7 +68,13 @@ function VerifyAccount() {
     if (!canResend) return;
     try {
       setIsResending(true);
-      await axiosInstance.post("/api/v1/auth/resend-verification-otp");
+      if (mode === "forgot_password") {
+        await axiosInstance.post("/api/v1/auth/forgot-password", {
+          email: forgotEmail,
+        });
+      } else {
+        await axiosInstance.post("/api/v1/auth/resend-verification-otp");
+      }
       setOtp(Array(6).fill(""));
       startCountdown();
     } catch (error: any) {
@@ -68,15 +93,30 @@ function VerifyAccount() {
       return;
     }
     const otpCode = otp.join("");
+
     try {
       setIsConfirming(true);
-      await axiosInstance.post("/api/v1/auth/verify-email", {
-        email: user?.email,
-        otp: otpCode,
-      });
-      toast.success("Xác thực thành công!");
-      sessionStorage.removeItem("pendingVerify");
-      navigate("/");
+
+      if (mode === "forgot_password") {
+        await axiosInstance.post("/api/v1/auth/verify-forgot-password-otp", {
+          email: forgotEmail,
+          otp: otpCode,
+        });
+        toast.success("Xác thực thành công!");
+        isNavigating.current = true;
+        sessionStorage.setItem("resetEmail", forgotEmail);
+        sessionStorage.removeItem("otpMode");
+        sessionStorage.removeItem("forgotPassword");
+        navigate("/reset-password");
+      } else {
+        await axiosInstance.post("/api/v1/auth/verify-email", {
+          email: user?.email,
+          otp: otpCode,
+        });
+        toast.success("Xác thực thành công!");
+        sessionStorage.removeItem("pendingVerify");
+        navigate("/");
+      }
     } catch (error: any) {
       toast.error(
         error?.response?.data?.message ||
@@ -86,6 +126,8 @@ function VerifyAccount() {
       setIsConfirming(false);
     }
   };
+
+  const displayEmail = mode === "forgot_password" ? forgotEmail : user?.email;
 
   return (
     <div className="w-full h-[100vh] flex items-start justify-center bg-gray-100">
@@ -97,9 +139,13 @@ function VerifyAccount() {
           />
         </span>
         <div>
-          <h5 className="text-[2.4rem]">Xác thực tài khoản</h5>
+          <h5 className="text-[2.2rem]">
+            {mode === "forgot_password"
+              ? "Xác thực quên mật khẩu"
+              : "Xác thực tài khoản"}
+          </h5>
           <p className="text-gray-600">Nhập mã 6 chữ số đã gửi đến email</p>
-          <p className="text-gray-600">{user?.email}</p>
+          <p className="text-gray-600">{displayEmail}</p>
         </div>
         <div className="flex flex-col gap-5 items-center justify-center">
           <OtpInputFields otp={otp} setOtp={setOtp} style={"large"} />
@@ -120,7 +166,7 @@ function VerifyAccount() {
           {canResend ? (
             <button
               type="button"
-              className={`text-blue-500 hover:text-blue-700 hover:cursor-pointer`}
+              className="text-blue-500 hover:text-blue-700 hover:cursor-pointer"
               onClick={() => handleResend()}
               disabled={isResending}
             >
@@ -135,4 +181,4 @@ function VerifyAccount() {
   );
 }
 
-export default VerifyAccount;
+export default VerifyOtp;

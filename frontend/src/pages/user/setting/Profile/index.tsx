@@ -66,6 +66,15 @@ function Profile() {
   return (
     <div className="p-[2rem]">
       <h4 className="text-[2rem] font-medium mb-8">Thông tin cơ bản</h4>
+      <div className="mb-6 flex justify-end">
+        <Link
+          to={`/users/${user.id}`}
+          className="inline-flex h-[3.8rem] items-center gap-2 rounded-xl border border-gray-300 px-4 text-[1.4rem] text-gray-700 transition-colors hover:bg-gray-50"
+        >
+          Xem hồ sơ công khai
+          <FontAwesomeIcon icon={faAngleRight} className="text-gray-500" />
+        </Link>
+      </div>
       <form onSubmit={handleSubmit(onSubmit)}>
         <div className="space-y-6">
           <input
@@ -178,13 +187,17 @@ function Profile() {
         </div>
 
         <div className="w-full h-[4.6rem] flex items-center justify-between rounded-xl border border-gray-300 px-8 outline-none ">
-          {!user?.phone ? (
+          {user?.phone ? (
             <div className="text-gray-600">{user?.phone}</div>
           ) : (
             <div className="flex items-center justify-between w-full text-gray-500">
               <span>Số điện thoại</span>
-              <button type="button" className="block">
-                Chưa liên kết
+              <button
+                type="button"
+                className="block hover:text-blue-500 transition-colors hover:cursor-pointer"
+                onClick={handleRedirectSecurity}
+              >
+                Liên kết
               </button>
             </div>
           )}

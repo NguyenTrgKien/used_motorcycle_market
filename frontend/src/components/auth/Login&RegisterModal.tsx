@@ -17,7 +17,7 @@ interface LoginAndRegisterModalProp {
   onClose: () => void;
 }
 
-type Step = "form" | "otp" | "forgot";
+type Step = "form" | "otp" | "loginOtp" | "forgot";
 
 function LoginAndRegisterModal({ onClose }: LoginAndRegisterModalProp) {
   const queryClient = useQueryClient();
@@ -56,6 +56,13 @@ function LoginAndRegisterModal({ onClose }: LoginAndRegisterModalProp) {
   const [errorOtp, setErrorOtp] = useState("");
   const [errMessage, setErrMessage] = useState("");
   const { refetchUser } = useUser();
+
+  const handleLoginSuccess = () => {
+    refetchUser();
+    toast.success("Đăng nhập thành công!");
+    queryClient.invalidateQueries({ queryKey: ["user"] });
+    onClose();
+  };
 
   useEffect(() => {
     if (countDown <= 0) {
@@ -103,12 +110,19 @@ function LoginAndRegisterModal({ onClose }: LoginAndRegisterModalProp) {
       let res;
       if (isLogin) {
         res = await axiosInstance.post("/api/v1/auth/login", dataRequest);
-        if (res.status === 201) {
-          refetchUser();
-          toast.success("Đăng nhập thành công!");
-          queryClient.invalidateQueries({ queryKey: ["user"] });
-          onClose();
+        console.log(res);
+
+        if (res.data?.two_factor_enabled) {
+          setOtp("");
+          setErrorOtp("");
+          setStep("loginOtp");
+          startCountdown();
+          setCountDown(60);
+          setCanResend(false);
+          toast.info("Mã OTP đã được gửi về email của bạn!");
+          return;
         }
+        handleLoginSuccess();
       } else {
         res = await axiosInstance.post("/api/v1/auth/register", dataRequest);
         if (res.status === 201) {
@@ -150,15 +164,46 @@ function LoginAndRegisterModal({ onClose }: LoginAndRegisterModalProp) {
     }
   };
 
+  const handleVerifyLoginOtp = async () => {
+    try {
+      if (!otp) {
+        setErrorOtp("Vui lòng nhập mã otp!");
+        return;
+      }
+      if (otp.length !== 6) {
+        setErrorOtp("Mã OTP phải đủ 6 số!");
+        return;
+      }
+      setIsLoading(true);
+      const res = await axiosInstance.post("/api/v1/auth/verify-login-otp", {
+        email: dataRequest.email,
+        otp,
+      });
+      if (res.status >= 200 && res.status < 300) {
+        handleLoginSuccess();
+      }
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.message || "OTP không đúng hoặc đã hết hạn!",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleResendOtp = async () => {
     try {
       if (!canResend) return;
       setIsResendOtp(true);
-      await axiosInstance.get("/api/v1/auth/resend-otp", {
-        params: {
-          email: dataRequest.email,
-        },
-      });
+      if (step === "loginOtp") {
+        await axiosInstance.post("/api/v1/auth/login", dataRequest);
+      } else {
+        await axiosInstance.get("/api/v1/auth/resend-otp", {
+          params: {
+            email: dataRequest.email,
+          },
+        });
+      }
       startCountdown();
       setCountDown(60);
       setCanResend(false);
@@ -199,11 +244,16 @@ function LoginAndRegisterModal({ onClose }: LoginAndRegisterModalProp) {
             Tất cả các loại xe máy đều có ở đây!
           </div>
         </div>
-        {step === "otp" ? (
+        {step === "otp" || step === "loginOtp" ? (
           <div className="flex-1 p-[2rem]">
-            <h3 className="text-[2.2rem] font-medium mb-8">Nhập mã OTP</h3>
+            <h3 className="text-[2.2rem] font-medium mb-8">
+              {step === "loginOtp" ? "Xác minh 2 lớp" : "Nhập mã OTP"}
+            </h3>
             <p className="text-gray-500 text-[1.4rem]">
-              Mã OTP đã được gửi đến <strong>{dataRequest.email}</strong>
+              {step === "loginOtp"
+                ? "Nhập mã OTP để hoàn tất đăng nhập "
+                : "Mã OTP đã được gửi đến "}
+              <strong>{dataRequest.email}</strong>
             </p>
             <input
               type="number"
@@ -217,7 +267,9 @@ function LoginAndRegisterModal({ onClose }: LoginAndRegisterModalProp) {
             <button
               type="button"
               disabled={isLoading}
-              onClick={handleVerifyOtp}
+              onClick={
+                step === "loginOtp" ? handleVerifyLoginOtp : handleVerifyOtp
+              }
               className="w-full mt-5 h-[4.2rem] flex items-center justify-center bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors duration-300 cursor-pointer"
             >
               {isLoading ? "Đang xử lý..." : "Xác nhận OTP"}

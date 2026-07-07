@@ -81,10 +81,19 @@ export class User {
   personalInfo?: string;
 
   @Column({ default: false })
+  showEmail: boolean;
+
+  @Column({ default: true })
+  showPhone: boolean;
+
+  @Column({ default: false })
   two_factor_enabled: boolean;
 
   @Column({ type: 'enum', enum: UserTwoFactorMethod, nullable: true })
   two_factor_method: UserTwoFactorMethod;
+
+  @Column({ default: false })
+  hasSeenCreatePostGuide: boolean;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -18,28 +18,28 @@ export class UserSession {
   @Column({ nullable: true })
   deviceName: string;
 
-  @Column({ nullable: true }) // Tên trình duyệt
+  @Column({ nullable: true })
   browser: string;
 
-  @Column({ nullable: true }) // Hệ điều hành
+  @Column({ nullable: true })
   os: string;
 
-  @Column({ nullable: true }) // ip tại thời điểm đăng nhập
+  @Column({ nullable: true })
   ipAddress: string;
 
   @Column({ nullable: true })
   userAgent: string;
 
-  @Column({ type: 'timestamp' }) // Thời gian hết hạn
+  @Column({ type: 'timestamp' })
   expiredAt: Date;
 
-  @Column({ nullable: true }) // Đã logout/thu hồi hay chưa
+  @Column({ nullable: true })
   revokedAt: Date;
 
-  @Column({ nullable: true }) // Lần hoạt động cuối cùng
+  @Column({ nullable: true })
   lastActive: Date;
 
-  @CreateDateColumn() // thời điểm session được tạo
+  @CreateDateColumn()
   createdAt: Date;
 
   @ManyToOne(() => User, (user) => user.user_session)
