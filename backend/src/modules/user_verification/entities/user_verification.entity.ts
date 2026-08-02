@@ -23,6 +23,9 @@ export class UserVerification {
   @Column()
   token: string;
 
+  @Column({ default: 0 })
+  failedAttempts: number;
+
   @Column({ nullable: true })
   verifiedAt?: Date;
 

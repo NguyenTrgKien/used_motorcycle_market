@@ -1,32 +1,40 @@
 ﻿import {
-  faArrowLeft,
   faCalendarDays,
   faChevronLeft,
   faChevronRight,
   faCommentDots,
   faGaugeHigh,
+  faHeart as faHeartSolid,
   faLocationDot,
   faPenToSquare,
   faPhone,
   faShieldHalved,
   faStar,
 } from "@fortawesome/free-solid-svg-icons";
+import { faHeart as faHeartRegular } from "@fortawesome/free-regular-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import avatarDefault from "../../../assets/images/avatar_default.png";
 import axiosInstance from "../../../configs/axiosInstance";
+import useAuthModal from "../../../hooks/useAuthModal";
 import { useUser } from "../../../hooks/useUser";
+import PostCard from "../HomePage/components/PostCard";
 import type { ListingPost } from "./post.types";
 
 function PostDetail() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { user } = useUser();
+  const { openAuthModal } = useAuthModal();
   const [post, setPost] = useState<ListingPost | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
   const [selectedImage, setSelectedImage] = useState("");
+  const [similarPosts, setSimilarPosts] = useState<ListingPost[]>([]);
+  const [isLoadingSimilarPosts, setIsLoadingSimilarPosts] = useState(false);
   const images = useMemo(
     () =>
       [...(post?.post_images || [])].sort((a, b) => a.sortOrder - b.sortOrder),
@@ -42,8 +50,14 @@ function PostDetail() {
   );
   const price = post ? Number(post.price).toLocaleString("vi-VN") : "";
   const seller = post?.user;
-  const sellerName = seller?.fullName || "Người bán";
-  const sellerAvatar = seller?.avatar || avatarDefault;
+  const isProfessionalSeller =
+    seller?.sellerType === "professional" && Boolean(seller.store);
+  const sellerName = isProfessionalSeller
+    ? seller?.store?.storeName || "Cửa hàng"
+    : seller?.fullName || "Người bán";
+  const sellerAvatar =
+    (isProfessionalSeller ? seller?.store?.logoUrl : seller?.avatar) ||
+    avatarDefault;
   const sellerPhone = seller?.phone?.trim();
   const isOwner = Boolean(user?.id && seller?.id && user.id === seller.id);
   const postedAt = post?.createdAt
@@ -98,6 +112,44 @@ function PostDetail() {
     });
   };
 
+  const handleToggleSaved = async () => {
+    if (!post) return;
+
+    if (!user?.id) {
+      openAuthModal();
+      return;
+    }
+
+    if (isOwner) {
+      toast.info("Bạn không thể lưu tin của chính mình");
+      return;
+    }
+
+    const nextSaved = !isSaved;
+
+    try {
+      setIsSaving(true);
+      setIsSaved(nextSaved);
+
+      if (nextSaved) {
+        const res = await axiosInstance.post("/api/v1/saved-post", {
+          postId: post.id,
+        });
+        toast.success(res.data.message || "Đã thêm tin vào yêu thích");
+      } else {
+        const res = await axiosInstance.delete(`/api/v1/saved-post/${post.id}`);
+        toast.success(res.data.message || "Đã bỏ tin khỏi yêu thích");
+      }
+    } catch (error: any) {
+      setIsSaved(!nextSaved);
+      toast.error(
+        error?.response?.data?.message || "Không thể cập nhật tin yêu thích",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   useEffect(() => {
     const fetchPost = async () => {
       try {
@@ -115,6 +167,22 @@ function PostDetail() {
 
         setPost(postData);
         setSelectedImage(primaryImage);
+        setIsSaved(Boolean(postData.isSaved));
+
+        if (user?.id && postData.user?.id !== user.id) {
+          void axiosInstance
+            .post("/api/v1/view-history", { postId: postData.id })
+            .catch(() => undefined);
+
+          try {
+            const savedRes = await axiosInstance.get<{
+              data: { isSaved: boolean };
+            }>(`/api/v1/saved-post/status/${postData.id}`);
+            setIsSaved(Boolean(savedRes.data.data.isSaved));
+          } catch {
+            setIsSaved(false);
+          }
+        }
       } catch (error: any) {
         toast.error(error?.response?.data?.message || "Không thể tải tin đăng");
       } finally {
@@ -123,19 +191,36 @@ function PostDetail() {
     };
 
     if (slug) void fetchPost();
+  }, [slug, user?.id]);
+
+  useEffect(() => {
+    const fetchSimilarPosts = async () => {
+      if (!slug) return;
+
+      try {
+        setIsLoadingSimilarPosts(true);
+        const res = await axiosInstance.get<{ data: ListingPost[] }>(
+          `/api/v1/posts/${slug}/similar`,
+          { params: { limit: 4 } },
+        );
+        setSimilarPosts(res.data.data || []);
+      } catch {
+        setSimilarPosts([]);
+      } finally {
+        setIsLoadingSimilarPosts(false);
+      }
+    };
+
+    void fetchSimilarPosts();
   }, [slug]);
 
   if (isLoading) {
-    return (
-      <div className="px-[10rem] pt-[9rem] text-center text-gray-500">
-        Đang tải tin đăng...
-      </div>
-    );
+    return <PostDetailSkeleton />;
   }
 
   if (!post) {
     return (
-      <div className="px-[10rem] pt-[9rem] text-center">
+      <div className="px-[20rem] pt-[2rem] text-center">
         <p className="text-gray-500">Không tìm thấy tin đăng</p>
         <button
           onClick={() => navigate(-1)}
@@ -148,16 +233,7 @@ function PostDetail() {
   }
 
   return (
-    <div className="px-[10rem] pt-[9rem] pb-16">
-      <button
-        type="button"
-        onClick={() => navigate(-1)}
-        className="mb-6 flex h-14 items-center gap-3 rounded-xl border border-gray-300 px-5 text-gray-700 transition-colors hover:bg-gray-50"
-      >
-        <FontAwesomeIcon icon={faArrowLeft} />
-        Quay lại
-      </button>
-
+    <div className="px-[20rem] pt-[2rem] pb-16">
       <div className="grid grid-cols-[minmax(0,1fr)_46rem] gap-8">
         <div className="space-y-6">
           <section className="rounded-xl border border-gray-200 bg-white p-5">
@@ -287,9 +363,27 @@ function PostDetail() {
             <h1 className="text-[2.6rem] font-semibold leading-tight text-gray-900">
               {post.title}
             </h1>
-            <p className="mt-4 text-[2.8rem] font-semibold text-amber-600">
+            <p className="mt-4 text-[2.8rem] font-semibold text-red-500">
               {price} đ
             </p>
+
+            {!isOwner && (
+              <button
+                type="button"
+                onClick={handleToggleSaved}
+                disabled={isSaving}
+                className={`mt-5 flex h-14 w-full items-center justify-center gap-3 rounded-xl border font-medium transition-colors ${
+                  isSaved
+                    ? "border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                    : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                } disabled:cursor-not-allowed disabled:opacity-70`}
+              >
+                <FontAwesomeIcon
+                  icon={isSaved ? faHeartSolid : faHeartRegular}
+                />
+                {isSaved ? "Đã lưu tin" : "Lưu tin yêu thích"}
+              </button>
+            )}
 
             {isOwner && (
               <Link
@@ -346,6 +440,14 @@ function PostDetail() {
                     <FontAwesomeIcon icon={faShieldHalved} className="mr-2" />
                     {seller?.isVerified ? "Đã xác minh" : "Chưa xác minh"}
                   </p>
+                  {isProfessionalSeller && (
+                    <Link
+                      to={`/stores/${seller?.store?.id}`}
+                      className="mt-2 inline-flex rounded-full bg-amber-50 px-3 py-1 text-[1.2rem] font-medium text-amber-700 hover:bg-amber-100"
+                    >
+                      Người bán chuyên · Xem cửa hàng
+                    </Link>
+                  )}
                   <div className="mt-2 flex items-center gap-2 text-[1.3rem] text-gray-500">
                     <FontAwesomeIcon icon={faStar} className="text-amber-400" />
                     <span>
@@ -387,6 +489,131 @@ function PostDetail() {
                   </button>
                 )}
               </div>
+            </div>
+          </section>
+        </aside>
+      </div>
+
+      {(isLoadingSimilarPosts || similarPosts.length > 0) && (
+        <section className="mt-8 rounded-xl border border-gray-200 bg-white p-6">
+          <div className="mb-5">
+            <h2 className="text-[2rem] font-semibold text-gray-900">
+              Tin đăng tương tự
+            </h2>
+            <p className="mt-1 text-[1.4rem] text-gray-500">
+              Gợi ý dựa trên dòng xe, hãng, loại xe, giá, năm sản xuất và khu
+              vực
+            </p>
+          </div>
+          {isLoadingSimilarPosts ? (
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="overflow-hidden rounded-2xl border border-gray-200"
+                >
+                  <div className="aspect-[4/3] animate-pulse bg-gray-200" />
+                  <div className="space-y-3 p-4">
+                    <div className="h-5 w-4/5 animate-pulse rounded bg-gray-200" />
+                    <div className="h-6 w-1/2 animate-pulse rounded bg-amber-100" />
+                    <div className="h-4 w-2/3 animate-pulse rounded bg-gray-100" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {similarPosts.map((similarPost) => (
+                <PostCard key={similarPost.id} post={similarPost} />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+function SkeletonBlock({ className = "" }: { className?: string }) {
+  return <div className={`animate-pulse rounded bg-gray-200 ${className}`} />;
+}
+
+function PostDetailSkeleton() {
+  return (
+    <div className="px-[20rem] pt-[2rem] pb-16">
+      <SkeletonBlock className="mb-6 h-14 w-36 rounded-xl" />
+
+      <div className="grid grid-cols-[minmax(0,1fr)_46rem] gap-8">
+        <div className="space-y-6">
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
+            <SkeletonBlock className="aspect-[16/10] w-full rounded-xl" />
+            <div className="mt-4 grid grid-cols-6 gap-3">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <SkeletonBlock
+                  key={index}
+                  className="aspect-square rounded-lg"
+                />
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-gray-200 bg-white p-6">
+            <div className="flex flex-wrap gap-4">
+              <SkeletonBlock className="h-5 w-24" />
+              <SkeletonBlock className="h-5 w-32" />
+            </div>
+            <SkeletonBlock className="mt-6 h-7 w-40" />
+            <div className="mt-6 space-y-3">
+              <SkeletonBlock className="h-5 w-full bg-gray-100" />
+              <SkeletonBlock className="h-5 w-11/12 bg-gray-100" />
+              <SkeletonBlock className="h-5 w-4/5 bg-gray-100" />
+              <SkeletonBlock className="h-5 w-2/3 bg-gray-100" />
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-gray-200 bg-white p-6">
+            <SkeletonBlock className="mb-5 h-7 w-36" />
+            <div className="grid grid-cols-2 gap-4">
+              {Array.from({ length: 12 }).map((_, index) => (
+                <div key={index} className="rounded-xl bg-gray-50 p-4">
+                  <SkeletonBlock className="h-4 w-24 bg-gray-100" />
+                  <SkeletonBlock className="mt-3 h-5 w-3/5" />
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <aside className="space-y-6">
+          <section className="sticky top-[9rem] rounded-xl border border-gray-200 bg-white p-6">
+            <SkeletonBlock className="h-8 w-5/6" />
+            <SkeletonBlock className="mt-3 h-8 w-3/5" />
+            <SkeletonBlock className="mt-5 h-10 w-44 bg-amber-100" />
+            <div className="mt-5 space-y-4">
+              <div className="flex gap-3">
+                <SkeletonBlock className="h-5 w-5 shrink-0 rounded-full" />
+                <SkeletonBlock className="h-5 flex-1 bg-gray-100" />
+              </div>
+              <div className="flex gap-3">
+                <SkeletonBlock className="h-5 w-5 shrink-0 rounded-full" />
+                <SkeletonBlock className="h-5 w-40 bg-gray-100" />
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-gray-200 bg-white p-6">
+            <SkeletonBlock className="mb-5 h-7 w-40" />
+            <div className="flex items-center gap-4">
+              <SkeletonBlock className="h-16 w-16 shrink-0 rounded-full" />
+              <div className="min-w-0 flex-1">
+                <SkeletonBlock className="h-5 w-3/5" />
+                <SkeletonBlock className="mt-3 h-4 w-28 bg-gray-100" />
+                <SkeletonBlock className="mt-3 h-4 w-44 bg-gray-100" />
+              </div>
+            </div>
+            <div className="mt-5 grid grid-cols-1 gap-3">
+              <SkeletonBlock className="h-16 rounded-xl bg-amber-100" />
+              <SkeletonBlock className="h-16 rounded-xl bg-gray-100" />
             </div>
           </section>
         </aside>

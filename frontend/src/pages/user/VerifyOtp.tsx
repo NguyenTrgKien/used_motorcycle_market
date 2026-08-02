@@ -41,8 +41,8 @@ function VerifyOtp() {
       return;
     }
 
-    const pending = sessionStorage.getItem("pendingVerify");
-    if (!pending) {
+    const pendingEmail = sessionStorage.getItem("pendingVerify");
+    if (!pendingEmail) {
       navigate("/");
       return;
     }
@@ -73,7 +73,9 @@ function VerifyOtp() {
           email: forgotEmail,
         });
       } else {
-        await axiosInstance.post("/api/v1/auth/resend-verification-otp");
+        await axiosInstance.post("/api/v1/auth/resend-verification-otp", {
+          email: sessionStorage.getItem("pendingVerify"),
+        });
       }
       setOtp(Array(6).fill(""));
       startCountdown();
@@ -110,7 +112,7 @@ function VerifyOtp() {
         navigate("/reset-password");
       } else {
         await axiosInstance.post("/api/v1/auth/verify-email", {
-          email: user?.email,
+          email: sessionStorage.getItem("pendingVerify"),
           otp: otpCode,
         });
         toast.success("Xác thực thành công!");
@@ -127,7 +129,9 @@ function VerifyOtp() {
     }
   };
 
-  const displayEmail = mode === "forgot_password" ? forgotEmail : user?.email;
+  const displayEmail = mode === "forgot_password"
+    ? forgotEmail
+    : sessionStorage.getItem("pendingVerify");
 
   return (
     <div className="w-full h-[100vh] flex items-start justify-center bg-gray-100">

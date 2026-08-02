@@ -1,4 +1,4 @@
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { UserRole } from 'src/shared';
 import { ROLES_KEY } from 'src/common/decorators/role.decorator';
@@ -18,7 +18,7 @@ export class RolesGuard implements CanActivate {
     }
     const { user } = context.switchToHttp().getRequest<RequestWithUser>();
     if (!requiredRoles.includes(user.role)) {
-      throw new Error('Bạn không có quyền truy cập vào tài nguyên này');
+      throw new ForbiddenException('Bạn không có quyền truy cập vào tài nguyên này');
     }
     return true;
   }

@@ -5,11 +5,19 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
+@Index('IDX_messages_conversation_created', ['conversationId', 'createdAt'])
+@Index('IDX_messages_conversation_id', ['conversationId', 'id'])
+@Index('IDX_messages_conversation_sender_read', [
+  'conversationId',
+  'senderId',
+  'isRead',
+])
 @Entity('messages')
 export class Message {
   @PrimaryGeneratedColumn()
@@ -33,7 +41,7 @@ export class Message {
   @Column({ default: false })
   isRead: boolean;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
   @ManyToOne(() => Conversation, (conversation) => conversation.messages, {

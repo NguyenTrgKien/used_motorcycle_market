@@ -21,12 +21,15 @@ import {
   FilesInterceptor,
 } from '@nestjs/platform-express';
 import { Public } from 'src/common/decorators/public.decorator';
+import { Roles } from 'src/common/decorators/role.decorator';
+import { UserRole } from 'src/shared';
 import type { RequestWithUser } from '../auth/auth.controller';
 
 @Controller('posts')
 export class PostController {
   constructor(private readonly postService: PostService) {}
 
+  @Roles(UserRole.USER)
   @Post()
   @UseInterceptors(
     FileFieldsInterceptor([
@@ -51,12 +54,21 @@ export class PostController {
     );
   }
 
-  @Post('analyze-images')
+  @Roles(UserRole.USER)
+  @Post('analyze-images/attributes')
   @UseInterceptors(FilesInterceptor('images', 8))
   analyzeImages(@UploadedFiles() images: Express.Multer.File[]) {
     return this.postService.analyzeImages(images || []);
   }
 
+  @Roles(UserRole.USER)
+  @Post('analyze-images/description')
+  @UseInterceptors(FilesInterceptor('images', 8))
+  generateImageDescription(@UploadedFiles() images: Express.Multer.File[]) {
+    return this.postService.generateImageDescription(images || []);
+  }
+
+  @Roles(UserRole.USER)
   @Post('suggest-price')
   suggestPrice(@Body() suggestVehiclePriceDto: SuggestVehiclePriceDto) {
     return this.postService.suggestPrice(suggestVehiclePriceDto);
@@ -68,9 +80,71 @@ export class PostController {
     return this.postService.findAll(query);
   }
 
+  @Roles(UserRole.USER)
   @Get('my')
   findMine(@Req() req: RequestWithUser) {
     return this.postService.findMine(req.user.id);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Get('admin')
+  findForAdmin(@Query() query: Record<string, string | undefined>) {
+    return this.postService.findForAdmin(query);
+  }
+
+  @Roles(UserRole.ADMIN, UserRole.MODERATOR)
+  @Get('admin/pending')
+  findPendingForAdmin(@Query() query: Record<string, string | undefined>) {
+    return this.postService.findPendingForAdmin(query);
+  }
+
+  @Roles(UserRole.ADMIN, UserRole.MODERATOR)
+  @Get('admin/review/:slug')
+  findReviewForAdmin(@Param('slug') slug: string) {
+    return this.postService.findReviewForAdmin(slug);
+  }
+
+  @Public()
+  @Get(':slug/similar')
+  findSimilar(
+    @Param('slug') slug: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.postService.findSimilar(slug, Number(limit || 4));
+  }
+
+  @Roles(UserRole.ADMIN, UserRole.MODERATOR)
+  @Patch('admin/:id/approve')
+  approvePost(@Req() req: RequestWithUser, @Param('id', ParseIntPipe) id: number) {
+    return this.postService.approvePost(req.user.id, id);
+  }
+
+  @Roles(UserRole.ADMIN, UserRole.MODERATOR)
+  @Patch('admin/:id/reject')
+  rejectPost(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('reason') reason?: string,
+  ) {
+    return this.postService.rejectPost(id, reason);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Patch('admin/:id/restore')
+  restoreForAdmin(
+    @Req() req: RequestWithUser,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.postService.restoreForAdmin(req.user.id, id);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Delete('admin/:id')
+  removeForAdmin(
+    @Req() req: RequestWithUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body('reason') reason?: string,
+  ) {
+    return this.postService.removeForAdmin(req.user.id, id, reason);
   }
 
   @Public()
@@ -79,6 +153,7 @@ export class PostController {
     return this.postService.findOne(slug);
   }
 
+  @Roles(UserRole.USER)
   @Patch(':postId/images/:imageId/primary')
   setPrimaryImage(
     @Req() req: RequestWithUser,
@@ -88,6 +163,7 @@ export class PostController {
     return this.postService.setPrimaryImage(req.user.id, postId, imageId);
   }
 
+  @Roles(UserRole.USER)
   @Delete(':postId/images/:imageId')
   removeImage(
     @Req() req: RequestWithUser,
@@ -97,6 +173,7 @@ export class PostController {
     return this.postService.removeImage(req.user.id, postId, imageId);
   }
 
+  @Roles(UserRole.USER)
   @Patch(':id')
   @UseInterceptors(
     FileFieldsInterceptor([
@@ -123,11 +200,19 @@ export class PostController {
     );
   }
 
+  @Roles(UserRole.USER)
   @Patch(':id/sold')
   markSold(@Req() req: RequestWithUser, @Param('id', ParseIntPipe) id: number) {
     return this.postService.markSold(req.user.id, id);
   }
 
+  @Roles(UserRole.USER)
+  @Patch(':id/relist')
+  relist(@Req() req: RequestWithUser, @Param('id', ParseIntPipe) id: number) {
+    return this.postService.relist(req.user.id, id);
+  }
+
+  @Roles(UserRole.USER)
   @Delete(':id')
   remove(@Req() req: RequestWithUser, @Param('id', ParseIntPipe) id: number) {
     return this.postService.remove(req.user.id, id);

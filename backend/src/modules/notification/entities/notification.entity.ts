@@ -20,7 +20,7 @@ export class Notification {
   userId: number;
 
   @Column({ type: 'varchar' })
-  title: number;
+  title: string;
 
   @Column({ type: 'text' })
   content: string;

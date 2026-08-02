@@ -11,6 +11,10 @@ import { VehicleModel } from '../vehicle/entities/vehicle_model.entity';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 import { GeminiRateLimiterModule } from '../gemini-rate-limiter/gemini-rate-limiter.module';
 import { Review } from '../review/entities/review.entity';
+import { Report } from '../report/entities/report.entity';
+import { NotificationModule } from '../notification/notification.module';
+import { User } from '../user/entities/user.entity';
+import { ListingPaymentModule } from '../listing_payment/listing-payment.module';
 
 @Module({
   imports: [
@@ -22,9 +26,13 @@ import { Review } from '../review/entities/review.entity';
       VehicleBrand,
       VehicleModel,
       Review,
+      Report,
+      User,
     ]),
     CloudinaryModule,
     GeminiRateLimiterModule,
+    NotificationModule,
+    ListingPaymentModule,
   ],
   controllers: [PostController],
   providers: [PostService],

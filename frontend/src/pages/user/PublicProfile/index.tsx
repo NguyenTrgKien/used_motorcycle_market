@@ -1,17 +1,22 @@
 import {
-  faAngleRight,
-  faEnvelope,
+  faCalendarDays,
+  faCircle,
   faLocationDot,
-  faPhone,
+  faPlus,
   faRotateRight,
+  faShareNodes,
   faShieldHalved,
-  faUser,
+  faStar,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import axiosInstance from "../../../configs/axiosInstance";
 import type { UserType } from "../../../types/user.type";
+import PostCard from "../HomePage/components/PostCard";
+import type { PostsResponse } from "../HomePage/types";
+import type { ListingPost } from "../Post/post.types";
 
 interface PublicUserResponse {
   message: string;
@@ -31,189 +36,311 @@ function usePublicUser(userId?: string) {
   });
 }
 
+function usePublicPosts(userId: string | undefined, status: "active" | "sold") {
+  return useQuery<ListingPost[]>({
+    queryKey: ["public-user-posts", userId, status],
+    enabled: Boolean(userId),
+    queryFn: async () => {
+      const res = await axiosInstance.get<PostsResponse>("/api/v1/posts", {
+        params: { userId, status, limit: 50 },
+      });
+      return res.data.data.items;
+    },
+  });
+}
+
 function PublicProfile() {
   const { id } = useParams();
+  const [selectedStatus, setSelectedStatus] = useState<"active" | "sold">(
+    "active",
+  );
   const {
     data: user,
     isLoading: userLoading,
     isError: userError,
     refetch: refetchUser,
   } = usePublicUser(id);
+  const {
+    data: activePosts = [],
+    isLoading: activePostsLoading,
+    refetch: refetchActivePosts,
+  } = usePublicPosts(id, "active");
+  const {
+    data: soldPosts = [],
+    isLoading: soldPostsLoading,
+    refetch: refetchSoldPosts,
+  } = usePublicPosts(id, "sold");
+  const posts = selectedStatus === "active" ? activePosts : soldPosts;
+  const postsLoading =
+    selectedStatus === "active" ? activePostsLoading : soldPostsLoading;
+  const refetchPosts =
+    selectedStatus === "active" ? refetchActivePosts : refetchSoldPosts;
+
   const joinedAt = user?.createdAt
     ? new Intl.DateTimeFormat("vi-VN", {
         month: "2-digit",
         year: "numeric",
       }).format(new Date(user.createdAt))
     : "Chưa ghi nhận";
+  const coverImage = useMemo(() => {
+    for (const post of [...activePosts, ...soldPosts]) {
+      const image =
+        post.post_images?.find((item) => item.isPrimary)?.imageUrl ||
+        post.post_images?.[0]?.imageUrl;
+      if (image) return image;
+    }
+    return "";
+  }, [activePosts, soldPosts]);
+  const address = user?.addresses?.[0]
+    ? [user.addresses[0].district, user.addresses[0].province]
+        .filter(Boolean)
+        .join(", ")
+    : "Chưa công khai địa chỉ";
+
+  const handleShare = async () => {
+    const shareData = {
+      title: `Hồ sơ của ${user?.fullName || "người bán"}`,
+      url: window.location.href,
+    };
+
+    if (navigator.share) {
+      await navigator.share(shareData);
+      return;
+    }
+
+    await navigator.clipboard.writeText(window.location.href);
+  };
 
   if (userLoading) {
     return (
-      <div className="px-[10rem] pt-[9rem]">
-        <div className="rounded-xl border border-gray-200 bg-white p-8">
-          <div className="flex items-center gap-5">
-            <div className="h-24 w-24 animate-pulse rounded-full bg-gray-200" />
-            <div className="flex-1 space-y-3">
-              <div className="h-6 w-1/3 animate-pulse rounded bg-gray-200" />
-              <div className="h-4 w-1/4 animate-pulse rounded bg-gray-200" />
+      <main className="min-h-screen bg-gray-100 px-4 py-6 sm:px-8 lg:px-[20rem]">
+        <div className="mx-auto max-w-[150rem] overflow-hidden rounded-2xl bg-white">
+          <div className="h-[22rem] animate-pulse bg-gray-200" />
+          <div className="flex gap-6 p-8">
+            <div className="h-36 w-36 animate-pulse rounded-full bg-gray-200" />
+            <div className="flex-1 space-y-4 pt-4">
+              <div className="h-8 w-1/3 animate-pulse rounded bg-gray-200" />
+              <div className="h-5 w-1/2 animate-pulse rounded bg-gray-200" />
             </div>
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 
   if (userError || !user) {
     return (
-      <div className="px-[10rem] pt-[9rem]">
-        <div className="rounded-xl border border-red-100 bg-red-50 p-8">
-          <p className="text-[1.5rem] text-red-600">
+      <main className="min-h-screen bg-gray-100 px-4 py-10 sm:px-8 lg:px-[20rem]">
+        <div className="mx-auto max-w-[150rem] rounded-2xl border border-red-100 bg-white p-8 text-center">
+          <p className="text-[1.6rem] text-red-600">
             Không thể tải hồ sơ người dùng
           </p>
           <button
+            type="button"
             onClick={() => void refetchUser()}
-            className="mt-4 inline-flex h-[3.8rem] items-center gap-2 rounded-xl border border-red-200 px-4 text-[1.4rem] text-red-600"
+            className="mt-5 inline-flex h-[4rem] items-center gap-2 rounded-full border border-red-200 px-5 text-[1.4rem] font-medium text-red-600 hover:bg-red-50"
           >
             <FontAwesomeIcon icon={faRotateRight} />
             Tải lại
           </button>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="px-[10rem] pt-[9rem] pb-[4rem]">
-      <div className="grid grid-cols-[1fr_34rem] gap-8">
-        <div className="flex flex-col gap-6">
-          <section className="rounded-xl border border-gray-200 bg-white p-8">
-            <div className="flex items-start gap-5">
-              {user.avatar ? (
+    <main className="min-h-screen bg-[#f4f4f4] px-4 py-5 sm:px-8 lg:px-[20rem]">
+      <div className="mx-auto max-w-[150rem] space-y-7">
+        <section className="overflow-hidden rounded-2xl bg-white">
+          <div className="relative h-[16rem] overflow-hidden bg-gradient-to-r from-slate-800 via-slate-600 to-amber-500 sm:h-[22rem]">
+            {coverImage && (
+              <>
                 <img
-                  src={user.avatar}
-                  alt={`avatar-${user.fullName}`}
-                  referrerPolicy="no-referrer"
-                  className="h-24 w-24 rounded-full border border-gray-200 object-cover"
+                  src={coverImage}
+                  alt=""
+                  className="absolute inset-0 h-full w-full scale-105 object-cover blur-2xl opacity-55"
                 />
-              ) : (
-                <div className="flex h-24 w-24 items-center justify-center rounded-full bg-cyan-100 text-[2.2rem] font-semibold text-blue-800">
-                  {user.fullName?.slice(0, 2).toUpperCase() || "ND"}
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
+                <img
+                  src={coverImage}
+                  alt={`Ảnh bìa của ${user.fullName}`}
+                  className="relative mx-auto h-full w-full object-cover sm:w-[90%]"
+                />
+              </>
+            )}
+          </div>
+
+          <div className="px-6 pb-8 sm:px-10">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+              <div className="shrink-0 mt-12">
+                {user.avatar ? (
+                  <img
+                    src={user.avatar}
+                    alt={user.fullName}
+                    referrerPolicy="no-referrer"
+                    className="h-32 w-32 rounded-full border-4 border-white bg-white object-cover sm:h-40 sm:w-40"
+                  />
+                ) : (
+                  <div className="flex h-32 w-32 items-center justify-center rounded-full border-4 border-white bg-amber-100 text-[3rem] font-bold text-amber-700 sm:h-40 sm:w-40">
+                    {user.fullName?.slice(0, 2).toUpperCase() || "ND"}
+                  </div>
+                )}
+              </div>
+
+              <div className="min-w-0 flex-1 pt-1 sm:pt-6">
                 <div className="flex flex-wrap items-center gap-3">
-                  <h1 className="text-[2.6rem] font-medium text-gray-900">
+                  <h1 className="text-[2.4rem] font-bold text-gray-950 sm:text-[2.8rem]">
                     {user.fullName || "Người dùng"}
                   </h1>
                   {user.isVerified && (
-                    <span className="inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-[3px] text-[1.2rem] text-green-600">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-[1.2rem] font-medium text-green-700">
                       <FontAwesomeIcon icon={faShieldHalved} />
                       Đã xác minh
                     </span>
                   )}
                 </div>
-                <p className="mt-2 text-[1.4rem] text-gray-500">
-                  Thành viên từ {joinedAt}
-                </p>
+
+                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 text-[1.4rem] text-gray-600">
+                  <span className="inline-flex items-center gap-2">
+                    <FontAwesomeIcon
+                      icon={faCircle}
+                      className="text-[0.8rem] text-green-500"
+                    />
+                    Đang hoạt động
+                  </span>
+                  <span className="hidden text-gray-400 sm:inline">•</span>
+                  <span className="inline-flex items-center gap-2">
+                    <strong className="text-[1.7rem] text-gray-950">5</strong>
+                    <FontAwesomeIcon icon={faStar} className="text-amber-400" />
+                    <span className="underline underline-offset-2">
+                      Chưa có đánh giá
+                    </span>
+                  </span>
+                  <span className="hidden text-gray-400 sm:inline">•</span>
+                  <span className="inline-flex items-center gap-2">
+                    <FontAwesomeIcon icon={faCalendarDays} />
+                    Đã tham gia: {joinedAt}
+                  </span>
+                </div>
+
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                  <span className="mr-2 inline-flex items-center gap-2 text-[1.5rem] text-gray-700">
+                    <FontAwesomeIcon
+                      icon={faLocationDot}
+                      className="text-[1.8rem]"
+                    />
+                    {address}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void handleShare()}
+                    className="inline-flex h-[4.2rem] items-center gap-2 rounded-full border border-gray-300 px-5 text-[1.4rem] font-semibold text-gray-900 transition-colors hover:bg-gray-50"
+                  >
+                    <FontAwesomeIcon
+                      icon={faShareNodes}
+                      className="text-[1.7rem]"
+                    />
+                    Chia sẻ
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-[4.2rem] items-center gap-2 rounded-full border border-gray-300 px-5 text-[1.4rem] font-semibold text-gray-900 transition-colors hover:bg-gray-50"
+                  >
+                    <FontAwesomeIcon icon={faPlus} />
+                    Theo dõi
+                  </button>
+                </div>
+
                 {user.personalInfo && (
-                  <p className="mt-4 text-[1.5rem] leading-relaxed text-gray-600">
+                  <p className="mt-5 max-w-[90rem] text-[1.4rem] leading-7 text-gray-600">
                     {user.personalInfo}
                   </p>
                 )}
               </div>
             </div>
-          </section>
-        </div>
+          </div>
+        </section>
 
-        <aside className="flex flex-col gap-6">
-          <section className="rounded-xl border border-gray-200 bg-white p-6">
-            <h2 className="text-[1.8rem] font-medium text-gray-900">
-              Card người bán
+        <section className="rounded-2xl bg-white px-6 py-7 sm:px-10">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <h2 className="text-[2rem] text-gray-950">
+              Tất cả tin đăng ({activePosts.length + soldPosts.length})
             </h2>
-            <div className="mt-5 flex items-center gap-4">
-              {user.avatar ? (
-                <img
-                  src={user.avatar}
-                  alt={`seller-${user.fullName}`}
-                  referrerPolicy="no-referrer"
-                  className="h-16 w-16 rounded-full border border-gray-200 object-cover"
-                />
-              ) : (
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-cyan-100 text-[1.8rem] font-semibold text-blue-800">
-                  {user.fullName?.slice(0, 2).toUpperCase() || "ND"}
-                </div>
-              )}
-              <div className="min-w-0">
-                <p className="truncate text-[1.6rem] font-medium text-gray-900">
-                  {user.fullName || "Người bán"}
-                </p>
-                <p className="mt-1 text-[1.3rem] text-gray-500">
-                  {user.isVerified ? "Đã xác minh" : "Chưa xác minh"}
-                </p>
-              </div>
-            </div>
+            {(user.phone || user.email) && (
+              <a
+                href={user.phone ? `tel:${user.phone}` : `mailto:${user.email}`}
+                className="inline-flex h-[4.2rem] items-center rounded-full bg-amber-400 px-6 text-[1.4rem] font-semibold text-gray-950 transition-colors hover:bg-amber-500"
+              >
+                Liên hệ người bán
+              </a>
+            )}
+          </div>
 
-            <Link
-              to={`/users/${user.id}`}
-              className="mt-5 flex h-[4rem] items-center justify-center gap-2 rounded-xl border border-gray-300 text-[1.4rem] text-gray-700 transition-colors hover:bg-gray-50"
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setSelectedStatus("active")}
+              className={`inline-flex h-[4rem] items-center rounded-full px-5 text-[1.4rem] transition-colors ${
+                selectedStatus === "active"
+                  ? "bg-gray-950 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
             >
-              Xem hồ sơ người bán
-              <FontAwesomeIcon icon={faAngleRight} />
-            </Link>
-          </section>
+              Tin đang hoạt động ({activePosts.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedStatus("sold")}
+              className={`inline-flex h-[4rem] items-center rounded-full px-5 text-[1.4rem] transition-colors ${
+                selectedStatus === "sold"
+                  ? "bg-gray-950 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              Đã bán ({soldPosts.length})
+            </button>
+          </div>
 
-          <section className="rounded-xl border border-gray-200 bg-white p-6">
-            <h2 className="text-[1.8rem] font-medium text-gray-900">
-              Liên hệ người bán
-            </h2>
-            <div className="mt-5 flex flex-col gap-3">
-              {user.phone && (
-                <a
-                  href={`tel:${user.phone}`}
-                  className="flex h-[4.2rem] items-center gap-3 rounded-xl border border-gray-300 px-4 text-[1.4rem] text-gray-700 transition-colors hover:bg-gray-50"
-                >
-                  <FontAwesomeIcon icon={faPhone} className="text-gray-400" />
-                  {user.phone}
-                </a>
-              )}
-              {user.email && (
-                <a
-                  href={`mailto:${user.email}`}
-                  className="flex h-[4.2rem] items-center gap-3 rounded-xl border border-gray-300 px-4 text-[1.4rem] text-gray-700 transition-colors hover:bg-gray-50"
-                >
-                  <FontAwesomeIcon
-                    icon={faEnvelope}
-                    className="text-gray-400"
-                  />
-                  {user.email}
-                </a>
-              )}
-              {!user.phone && !user.email && (
-                <div className="rounded-xl bg-gray-50 px-4 py-5 text-center">
-                  <FontAwesomeIcon
-                    icon={faUser}
-                    className="text-[2rem] text-gray-300"
-                  />
-                  <p className="mt-2 text-[1.3rem] text-gray-500">
-                    Người bán chưa công khai thông tin liên hệ
-                  </p>
-                </div>
-              )}
+          {postsLoading ? (
+            <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="aspect-[4/3] animate-pulse rounded-2xl bg-gray-200"
+                />
+              ))}
             </div>
-          </section>
+          ) : posts.length > 0 ? (
+            <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {posts.map((post) => (
+                <PostCard key={post.id} post={post} />
+              ))}
+            </div>
+          ) : (
+            <div className="mt-8 rounded-2xl bg-gray-50 px-6 py-14 text-center">
+              <p className="text-[1.6rem] font-medium text-gray-700">
+                {selectedStatus === "active"
+                  ? "Người bán chưa có tin đăng đang hoạt động"
+                  : "Người bán chưa có tin đăng đã bán"}
+              </p>
+              <button
+                type="button"
+                onClick={() => void refetchPosts()}
+                className="mt-4 inline-flex items-center gap-2 text-[1.4rem] font-medium text-amber-700"
+              >
+                <FontAwesomeIcon icon={faRotateRight} />
+                Kiểm tra lại
+              </button>
+            </div>
+          )}
+        </section>
 
-          <section className="rounded-xl border border-gray-200 bg-white p-6">
-            <div className="flex items-center gap-3 text-[1.4rem] text-gray-500">
-              <FontAwesomeIcon icon={faLocationDot} />
-              <span>
-                {user.addresses?.[0]
-                  ? `${user.addresses[0].district}, ${user.addresses[0].province}`
-                  : "Chưa công khai địa chỉ"}
-              </span>
-            </div>
-          </section>
-        </aside>
+        <div className="text-center text-[1.3rem] text-gray-500">
+          <Link to="/" className="hover:text-amber-700">
+            Quay về trang chủ
+          </Link>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }
 

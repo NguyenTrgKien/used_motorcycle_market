@@ -8,6 +8,10 @@ import { SavedPost } from 'src/modules/saved_post/entities/saved_post.entity';
 import { User } from 'src/modules/user/entities/user.entity';
 import { Vehicle } from 'src/modules/vehicle/entities/vehicle.entity';
 import {
+  ListingBillingType,
+  ListingPricingGroup,
+} from 'src/modules/listing_payment/listing-payment.types';
+import {
   Column,
   CreateDateColumn,
   Entity,
@@ -78,6 +82,18 @@ export class Post {
   @Column({ type: 'timestamp', nullable: true })
   expiredAt?: Date;
 
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  listingBillingType?: ListingBillingType;
+
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  listingPricingGroup?: ListingPricingGroup;
+
+  @Column({ type: 'int', default: 0 })
+  listingFee: number;
+
+  @Column({ default: false })
+  freeQuotaRefunded: boolean;
+
   @Column({ type: 'timestamp', nullable: true })
   approvedAt?: Date;
 
@@ -86,6 +102,15 @@ export class Post {
 
   @Column({ type: 'varchar', nullable: true, length: 500 })
   rejectedReason?: string;
+
+  @Column({ type: 'varchar', nullable: true, length: 500 })
+  hiddenReason?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  hiddenAt?: Date;
+
+  @Column({ nullable: true })
+  hiddenBy?: number;
 
   @Column({ type: 'timestamp', nullable: true })
   soldAt?: Date;

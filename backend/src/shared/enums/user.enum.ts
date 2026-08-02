@@ -1,11 +1,25 @@
 export enum UserRole {
   ADMIN = 'admin',
+  MODERATOR = 'moderator',
+  CSKH = 'cskh',
   USER = 'user',
 }
 
 export enum UserStatus {
   ACTIVE = 'active',
   BANNED = 'banned',
+}
+
+export enum SellerType {
+  INDIVIDUAL = 'individual',
+  PROFESSIONAL = 'professional',
+}
+
+export enum ProfessionalSellerStatus {
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+  SUSPENDED = 'suspended',
 }
 
 export enum UserGender {

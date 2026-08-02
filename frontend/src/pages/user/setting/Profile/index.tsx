@@ -65,11 +65,11 @@ function Profile() {
 
   return (
     <div className="p-[2rem]">
-      <h4 className="text-[2rem] font-medium mb-8">Thông tin cơ bản</h4>
-      <div className="mb-6 flex justify-end">
+      <div className="mb-8 flex items-center justify-between gap-4">
+        <h4 className="text-[2rem] font-medium">Thông tin cơ bản</h4>
         <Link
           to={`/users/${user.id}`}
-          className="inline-flex h-[3.8rem] items-center gap-2 rounded-xl border border-gray-300 px-4 text-[1.4rem] text-gray-700 transition-colors hover:bg-gray-50"
+          className="inline-flex h-[3.8rem] shrink-0 items-center gap-2 rounded-xl border border-gray-300 px-4 text-[1.4rem] text-gray-700 transition-colors hover:bg-gray-50"
         >
           Xem hồ sơ công khai
           <FontAwesomeIcon icon={faAngleRight} className="text-gray-500" />

@@ -73,7 +73,7 @@ export class AuthService {
     });
 
     await this.userVerifyRepo.save({
-      token,
+      token: await hashPass(token),
       expiredAt,
       type,
       user: { id: userId },
@@ -86,12 +86,65 @@ export class AuthService {
     };
   }
 
+  private async ensureOtpCooldown(userId: number, type: VerificationType) {
+    const latestOtp = await this.userVerifyRepo.findOne({
+      where: { user: { id: userId }, type },
+      order: { createdAt: 'DESC' },
+    });
+    if (latestOtp && Date.now() - latestOtp.createdAt.getTime() < 60_000) {
+      throw new BadRequestException('Vui lòng chờ 60 giây trước khi yêu cầu OTP mới!');
+    }
+  }
+
+  private async validateOtp(
+    verification: UserVerification | null,
+    otp: string,
+  ) {
+    if (!verification) {
+      throw new BadRequestException('Mã OTP không hợp lệ hoặc đã hết hạn!');
+    }
+    if (verification.expiredAt <= new Date()) {
+      await this.userVerifyRepo.delete(verification.id);
+      throw new BadRequestException('Mã OTP đã hết hạn, vui lòng yêu cầu mã mới!');
+    }
+    if (verification.failedAttempts >= 5) {
+      await this.userVerifyRepo.delete(verification.id);
+      throw new BadRequestException('Mã OTP đã bị khóa do nhập sai quá nhiều lần!');
+    }
+    let valid = false;
+    try {
+      valid = await comparePass(otp, verification.token);
+    } catch {
+      valid = false;
+    }
+    if (!valid) {
+      const failedAttempts = verification.failedAttempts + 1;
+      await this.userVerifyRepo.update(verification.id, { failedAttempts });
+      if (failedAttempts >= 5) {
+        await this.userVerifyRepo.delete(verification.id);
+        throw new BadRequestException('Mã OTP đã bị khóa do nhập sai quá nhiều lần!');
+      }
+      throw new BadRequestException('Mã OTP không chính xác!');
+    }
+    return verification;
+  }
+
   async validateUser(email: string, password: string): Promise<any> {
-    const user = await this.userService.findUserByEmail(email);
+    const user = await this.userService.findUserByEmail(
+      email.trim().toLowerCase(),
+    );
 
     if (user && user.password) {
       const compareP = await comparePass(password, user.password);
       if (compareP) {
+        if (user.status !== 'active') {
+          throw new BadRequestException('Tài khoản đã bị khóa!');
+        }
+        if (!user.isVerified) {
+          throw new BadRequestException(
+            'Tài khoản chưa được xác minh. Vui lòng xác minh email!',
+          );
+        }
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { password, ...result } = user;
         return result;
@@ -114,11 +167,24 @@ export class AuthService {
   }
 
   async sendOtpLogin(user: User) {
+    await this.ensureOtpCooldown(user.id, VerificationType.LOGIN);
     const { token, expiredAt } = await this.createVerificationOtp(
       user.id,
       VerificationType.LOGIN,
     );
-    await this.mailService.sendLoginOtp(user.email, token);
+    if (user.two_factor_method === UserTwoFactorMethod.SMS) {
+      if (!user.phone || !user.phoneVerifiedAt) {
+        throw new BadRequestException('Số điện thoại chưa được xác minh!');
+      }
+      if (process.env.NODE_ENV === 'production') {
+        throw new InternalServerErrorException('Dịch vụ SMS chưa được cấu hình!');
+      }
+      console.log('LOGIN_TWO_FACTOR_OTP', token);
+    } else if (user.two_factor_method === UserTwoFactorMethod.AUTHENTICATOR) {
+      throw new BadRequestException('Phương thức Authenticator chưa được hỗ trợ!');
+    } else {
+      await this.mailService.sendLoginOtp(user.email, token);
+    }
     return {
       expiredAt,
       message: 'Mã otp đã được gửi về!',
@@ -146,20 +212,10 @@ export class AuthService {
       },
     });
 
-    if (!verification) {
-      throw new BadRequestException('Không tìm thấy mã OTP');
-    }
-
-    if (verification.token !== body.otp) {
-      throw new BadRequestException('Mã OTP không chính xác');
-    }
-
-    if (verification.expiredAt < new Date()) {
-      throw new BadRequestException('Mã OTP đã hết hạn');
-    }
+    const validVerification = await this.validateOtp(verification, body.otp);
 
     await this.userVerifyRepo.delete({
-      id: verification.id,
+      id: validVerification.id,
     });
 
     return user;
@@ -277,51 +333,50 @@ export class AuthService {
 
     const record = await this.userVerifyRepo.findOne({
       where: {
-        token: data.otp,
         type: VerificationType.REGISTER_EMAIL,
         user: {
           id: user.id,
         },
-        expiredAt: MoreThan(new Date()),
       },
+      order: { createdAt: 'DESC' },
     });
-
-    if (!record) {
-      throw new BadRequestException('Mã OTP không hợp lệ!');
-    }
-
-    if (new Date() > record.expiredAt) {
-      await this.userVerifyRepo.delete(record.id);
-      throw new BadRequestException(
-        'Mã OTP đã hết hạn, vui lòng yêu cầu mã mới!',
-      );
-    }
+    const validRecord = await this.validateOtp(record, data.otp);
 
     await this.userService.updateVerify(user.id, true);
-    await this.userVerifyRepo.delete(record.id);
+    await this.userVerifyRepo.delete(validRecord.id);
     const userUpdated = await this.userService.findUserById(user.id);
     return userUpdated as User;
   }
 
   // Resend verification otp with userId and type
-  async resendVerificationOtp(user: User) {
-    const email = user.email;
-    const existUser = await this.userService.findUserById(user.id);
+  async resendVerificationOtp(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const existUser = await this.userService.findUserByEmail(normalizedEmail);
     if (!existUser) {
-      throw new NotFoundException('Không tìm thấy người dùng!');
+      return { message: 'Nếu email tồn tại, OTP mới sẽ được gửi về email!' };
     }
 
     if (existUser.isVerified) {
       throw new BadRequestException('Tài khoản đã xác thực!');
     }
 
+    const latestOtp = await this.userVerifyRepo.findOne({
+      where: {
+        user: { id: existUser.id },
+        type: VerificationType.REGISTER_EMAIL,
+      },
+      order: { createdAt: 'DESC' },
+    });
+    if (latestOtp && Date.now() - latestOtp.createdAt.getTime() < 60_000) {
+      throw new BadRequestException('Vui lòng chờ 60 giây trước khi gửi lại OTP!');
+    }
     const { token, expiredAt } = await this.createVerificationOtp(
-      user.id,
+      existUser.id,
       VerificationType.REGISTER_EMAIL,
     );
 
     try {
-      await this.mailService.sendOtp(email, token);
+      await this.mailService.sendOtp(normalizedEmail, token);
     } catch (error) {
       console.log('Send mail failed =============>', error);
       throw new InternalServerErrorException('Gửi email thất bại!');
@@ -337,12 +392,14 @@ export class AuthService {
     const { email } = data;
     const user = await this.userService.findUserByEmail(email);
     if (!user) {
-      throw new NotFoundException('Không tìm thấy email!');
+      return { message: 'Nếu email tồn tại, OTP sẽ được gửi về email!' };
     }
 
     if (user.googleId && !user.password) {
       throw new BadRequestException('Tài khoản đăng nhập bằng google!');
     }
+
+    await this.ensureOtpCooldown(user.id, VerificationType.RESET_PASSWORD);
 
     const { token } = await this.createVerificationOtp(
       user.id,
@@ -365,25 +422,19 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException('Không tìm thấy email!');
     }
-    const isValid = await this.userVerifyRepo.findOne({
+    const verification = await this.userVerifyRepo.findOne({
       where: {
         user: {
           id: user.id,
         },
-        token: otp,
         type: VerificationType.RESET_PASSWORD,
-        expiredAt: MoreThan(new Date()),
       },
+      order: { createdAt: 'DESC' },
     });
-
-    if (isValid) {
-      await this.userVerifyRepo.update(isValid.id, {
-        verifiedAt: new Date(),
-      });
-    }
-
-    if (!isValid)
-      throw new BadRequestException('OTP không đúng hoặc đã hết hạn!');
+    const isValid = await this.validateOtp(verification, otp);
+    await this.userVerifyRepo.update(isValid.id, {
+      verifiedAt: new Date(),
+    });
     return { message: 'Xác thực thành công!' };
   }
 
@@ -409,9 +460,7 @@ export class AuthService {
     const isValid = verification;
     if (!isValid) throw new BadRequestException('Phiên xác thực hết hạn!');
     if (otp) {
-      if (isValid.token !== otp) {
-        throw new BadRequestException('OTP khong hop le hoac da het han!');
-      }
+      await this.validateOtp(isValid, otp);
     } else if (!isValid.verifiedAt) {
       throw new BadRequestException('Vui long xac thuc OTP truoc!');
     }
@@ -427,6 +476,14 @@ export class AuthService {
     return emailRegex.test(contact);
   }
 
+  normalizePhone(phone: string) {
+    const compact = phone.replace(/[\s.-]/g, '');
+    if (/^0\d{9}$/.test(compact)) return `+84${compact.slice(1)}`;
+    if (/^84\d{9}$/.test(compact)) return `+${compact}`;
+    if (/^\+84\d{9}$/.test(compact)) return compact;
+    throw new BadRequestException('Số điện thoại Việt Nam không hợp lệ!');
+  }
+
   // Validate email / phone and send otp to new email / phone
   async requestChangeContact(userId: number, data: ChangeContactDto) {
     const user = await this.userService.findUserById(userId);
@@ -435,15 +492,20 @@ export class AuthService {
       throw new NotFoundException('Không tìm thấy người dùng!');
     }
 
-    const { contact } = data;
-    const isEmail = this.isEmail(contact);
+    const isEmail = this.isEmail(data.contact);
+    const contact = isEmail
+      ? data.contact.trim().toLowerCase()
+      : this.normalizePhone(data.contact);
+    const phoneVerificationType = user.phone
+      ? VerificationType.CHANGE_PHONE
+      : VerificationType.ADD_PHONE;
 
     const latestOtp = await this.userVerifyRepo.findOne({
       where: {
         user: { id: user.id },
         type: isEmail
           ? VerificationType.CHANGE_EMAIL
-          : VerificationType.CHANGE_PHONE,
+          : phoneVerificationType,
       },
       order: {
         createdAt: 'DESC',
@@ -507,18 +569,21 @@ export class AuthService {
 
     await this.userVerifyRepo.delete({
       user: { id: user.id },
-      type: VerificationType.CHANGE_PHONE,
+      type: phoneVerificationType,
     });
 
     const { token } = await this.createVerificationOtp(
       user.id,
-      VerificationType.CHANGE_PHONE,
+      phoneVerificationType,
       {
         newPhone: contact,
       },
     );
 
-    console.log('=============>', token);
+    if (process.env.NODE_ENV === 'production') {
+      throw new InternalServerErrorException('Dịch vụ SMS chưa được cấu hình!');
+    }
+    console.log('PHONE_VERIFICATION_OTP', token);
     return {
       message: 'OTP đã gửi tới số điện thoại!',
     };
@@ -533,18 +598,19 @@ export class AuthService {
         user: {
           id: user.id,
         },
-        token: otp,
-        expiredAt: MoreThan(new Date()),
+        type: In([
+          VerificationType.CHANGE_EMAIL,
+          VerificationType.ADD_PHONE,
+          VerificationType.CHANGE_PHONE,
+        ]),
       },
+      order: { createdAt: 'DESC' },
     });
+    const validRecord = await this.validateOtp(record, otp);
 
-    if (!record) {
-      throw new BadRequestException('OTP không đúng hoặc đã hết hạn!');
-    }
-
-    switch (record.type) {
+    switch (validRecord.type) {
       case VerificationType.CHANGE_EMAIL: {
-        const newEmail = record.metadata?.newEmail;
+        const newEmail = validRecord.metadata?.newEmail;
 
         if (typeof newEmail !== 'string') {
           throw new BadRequestException('Thiếu email mới trong OTP!');
@@ -563,12 +629,13 @@ export class AuthService {
 
         // delete OTP sau khi verify thành công
         await this.userVerifyRepo.delete({
-          id: record.id,
+          id: validRecord.id,
         });
         break;
       }
+      case VerificationType.ADD_PHONE:
       case VerificationType.CHANGE_PHONE: {
-        const newPhone = record.metadata?.newPhone;
+        const newPhone = validRecord.metadata?.newPhone;
         if (typeof newPhone !== 'string') {
           throw new BadRequestException('Thiếu số điện thoại mới trong OTP!');
         }
@@ -584,7 +651,7 @@ export class AuthService {
         await this.userService.changePhone(user.id, newPhone);
 
         await this.userVerifyRepo.delete({
-          id: record.id,
+          id: validRecord.id,
         });
         break;
       }
@@ -596,7 +663,7 @@ export class AuthService {
       user: {
         id: user.id,
       },
-      type: record.type,
+      type: validRecord.type,
     });
 
     return { message: 'Xác thực thành công!' };
@@ -611,6 +678,7 @@ export class AuthService {
         },
         type: In([
           VerificationType.CHANGE_EMAIL,
+          VerificationType.ADD_PHONE,
           VerificationType.CHANGE_PHONE,
         ]),
       },
@@ -658,6 +726,7 @@ export class AuthService {
         message = 'OTP đã được gửi đến email!';
         break;
       }
+      case VerificationType.ADD_PHONE:
       case VerificationType.CHANGE_PHONE: {
         const cooldown = 60 * 1000;
         if (
@@ -669,19 +738,22 @@ export class AuthService {
 
         await this.userVerifyRepo.delete({
           user: { id: user.id },
-          type: VerificationType.CHANGE_PHONE,
+          type: record.type,
         });
 
         const newPhone = record.metadata?.newPhone as string;
         const { token, expiredAt } = await this.createVerificationOtp(
           user.id,
-          VerificationType.CHANGE_PHONE,
+          record.type,
           {
             newPhone,
           },
         );
         expiredAtResult = expiredAt;
-        console.log('==============> SMS token', token, expiredAt);
+        if (process.env.NODE_ENV === 'production') {
+          throw new InternalServerErrorException('Dịch vụ SMS chưa được cấu hình!');
+        }
+        console.log('PHONE_VERIFICATION_OTP', token, expiredAt);
         message = 'OTP đã được gửi đến số điện thoại!';
         break;
       }
@@ -784,6 +856,9 @@ export class AuthService {
     if (user && !user.googleId) {
       await this.userService.updateSocialGoogle(user.id, ggUser.googleId);
     }
+    if (!user.isVerified) {
+      await this.userService.updateVerify(user.id, true);
+    }
 
     const newUser = await this.userService.findUserById(user.id);
     if (!newUser) {
@@ -798,6 +873,8 @@ export class AuthService {
       throw new NotFoundException('Không tìm thấy người dùng!');
     }
     const { action, method } = body;
+    const effectiveMethod =
+      action === 'enable' ? method : user.two_factor_method;
 
     if (action === 'enable' && user.two_factor_enabled) {
       throw new BadRequestException('2FA đã được bật!');
@@ -806,24 +883,40 @@ export class AuthService {
     if (action === 'disable' && !user.two_factor_enabled) {
       throw new BadRequestException('2FA đã được tắt!');
     }
+    if (!effectiveMethod) {
+      throw new BadRequestException('Vui lòng chọn phương thức xác thực 2FA!');
+    }
+    if (effectiveMethod === UserTwoFactorMethod.AUTHENTICATOR) {
+      throw new BadRequestException('Phương thức Authenticator chưa được hỗ trợ!');
+    }
+    if (
+      effectiveMethod === UserTwoFactorMethod.SMS &&
+      (!user.phone || !user.phoneVerifiedAt)
+    ) {
+      throw new BadRequestException('Vui lòng xác minh số điện thoại trước khi dùng SMS 2FA!');
+    }
 
     const tokenType =
       action === 'enable'
         ? VerificationType.ENABLE_2FA
         : VerificationType.DISABLE_2FA;
+    await this.ensureOtpCooldown(user.id, tokenType);
     const { token, expiredAt } = await this.createVerificationOtp(
       user.id,
       tokenType,
     );
 
-    if (method === UserTwoFactorMethod.EMAIL) {
+    if (effectiveMethod === UserTwoFactorMethod.EMAIL) {
       await this.mailService.send2FaOtp(user.email, token, action);
     } else {
-      console.log('===>', token);
+      if (process.env.NODE_ENV === 'production') {
+        throw new InternalServerErrorException('Phương thức 2FA này chưa được cấu hình!');
+      }
+      console.log('TWO_FACTOR_OTP', token);
     }
 
     return {
-      message: `Đã gửi otp đến ${method === UserTwoFactorMethod.EMAIL ? 'email của bạn!' : 'SMS!'}`,
+      message: `Đã gửi otp đến ${effectiveMethod === UserTwoFactorMethod.EMAIL ? 'email của bạn!' : 'SMS!'}`,
       data: {
         expiredAt,
       },
@@ -847,18 +940,11 @@ export class AuthService {
     const verification = await this.userVerifyRepo.findOne({
       where: {
         user: { id: userId },
-        token: otp,
         type: verificationType,
       },
     });
-
-    if (!verification) {
-      throw new BadRequestException('Mã OTP không hợp lệ!');
-    }
-
-    if (verification.expiredAt < new Date()) {
-      throw new BadRequestException('Mã OTP đã hết hạn!');
-    }
+    const validVerification = await this.validateOtp(verification, otp);
+    await this.userVerifyRepo.delete(validVerification.id);
 
     if (action === 'enable') {
       await this.userService.update2fa(user.id, true, method);

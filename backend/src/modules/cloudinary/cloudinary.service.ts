@@ -34,6 +34,7 @@ export class CloudinaryService {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           folder: this.configService.get<string>('CLOUDINARY_UPLOAD_FOLDER'),
+          resource_type: 'auto',
         },
         (error, result) => {
           if (error) {

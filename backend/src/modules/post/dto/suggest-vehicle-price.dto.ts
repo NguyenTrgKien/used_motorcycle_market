@@ -7,6 +7,9 @@ import {
 } from 'src/shared';
 
 export class SuggestVehiclePriceDto {
+  @IsNumberString()
+  categoryId: string;
+
   @IsOptional()
   @IsString()
   brandName?: string;
@@ -15,8 +18,9 @@ export class SuggestVehiclePriceDto {
   @IsString()
   modelName?: string;
 
+  @IsOptional()
   @IsEnum(VehicleBodyType)
-  bodyType: VehicleBodyType;
+  bodyType?: VehicleBodyType;
 
   @IsOptional()
   @IsNumberString()
@@ -34,8 +38,9 @@ export class SuggestVehiclePriceDto {
   @IsString()
   color?: string;
 
+  @IsOptional()
   @IsEnum(VehicleCondition)
-  condition: VehicleCondition;
+  condition?: VehicleCondition;
 
   @IsOptional()
   @IsString()
@@ -53,11 +58,13 @@ export class SuggestVehiclePriceDto {
   @IsString()
   rangePerCharge?: string;
 
+  @IsOptional()
   @IsEnum(VehicleFuelType)
-  fuelType: VehicleFuelType;
+  fuelType?: VehicleFuelType;
 
+  @IsOptional()
   @IsEnum(VehicleTransmission)
-  transmission: VehicleTransmission;
+  transmission?: VehicleTransmission;
 
   @IsOptional()
   @IsString()

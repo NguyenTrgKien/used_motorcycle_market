@@ -17,9 +17,10 @@ export const useUser = () => {
   const { data: user, isLoading } = useQuery({
     queryKey: ["user"],
     queryFn: fetchUser,
-    staleTime: 0,
-    gcTime: 0,
+    staleTime: 60 * 1000,
+    gcTime: 30 * 60 * 1000,
     retry: false,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
   });
 

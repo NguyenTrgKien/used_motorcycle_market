@@ -11,8 +11,7 @@ import {
   Unique,
 } from 'typeorm';
 
-// Xác minh danh tính người dùng
-@Unique(['user'])
+@Unique(['userId'])
 @Unique(['idNumber', 'idType'])
 @Entity('user_identities')
 export class UserIdentity {
@@ -52,6 +51,15 @@ export class UserIdentity {
   @Column()
   selfieUrl: string;
 
+  @Column({ nullable: true, select: false })
+  idFrontPublicId?: string;
+
+  @Column({ nullable: true, select: false })
+  idBackPublicId?: string;
+
+  @Column({ nullable: true, select: false })
+  selfiePublicId?: string;
+
   @Index()
   @Column({
     type: 'enum',
@@ -71,6 +79,9 @@ export class UserIdentity {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @Column({ name: 'user_id' })
+  userId: number;
 
   @Index()
   @OneToOne(() => User, (user) => user.identity)

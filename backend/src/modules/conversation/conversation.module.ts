@@ -10,11 +10,17 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module';
 import { ConversationGateway } from './conversation.gateway';
+import Redis from 'ioredis';
+import { CONVERSATION_REDIS } from './conversation.constants';
+import { CloudinaryModule } from '../cloudinary/cloudinary.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Conversation, Message, Post, User]),
     AuthModule,
+    CloudinaryModule,
+    NotificationModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -27,7 +33,30 @@ import { ConversationGateway } from './conversation.gateway';
     }),
   ],
   controllers: [ConversationController],
-  providers: [ConversationService, ConversationGateway],
+  providers: [
+    ConversationService,
+    ConversationGateway,
+    {
+      provide: CONVERSATION_REDIS,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const redis = new Redis(
+          config.get<string>('REDIS_URL') || 'redis://localhost:6379',
+          {
+            lazyConnect: true,
+            enableOfflineQueue: false,
+            maxRetriesPerRequest: 1,
+            connectTimeout: 500,
+          },
+        );
+
+        redis.on('error', () => undefined);
+        redis.connect().catch(() => undefined);
+
+        return redis;
+      },
+    },
+  ],
   exports: [ConversationService],
 })
 export class ConversationModule {}

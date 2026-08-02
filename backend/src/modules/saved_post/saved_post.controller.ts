@@ -1,34 +1,50 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  Req,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { SavedPostService } from './saved_post.service';
 import { CreateSavedPostDto } from './dto/create-saved_post.dto';
-import { UpdateSavedPostDto } from './dto/update-saved_post.dto';
+import { Roles } from 'src/common/decorators/role.decorator';
+import { UserRole } from 'src/shared';
+import type { RequestWithUser } from '../auth/auth.controller';
 
 @Controller('saved-post')
+@Roles(UserRole.USER)
 export class SavedPostController {
   constructor(private readonly savedPostService: SavedPostService) {}
 
   @Post()
-  create(@Body() createSavedPostDto: CreateSavedPostDto) {
-    return this.savedPostService.create(createSavedPostDto);
+  create(
+    @Req() req: RequestWithUser,
+    @Body() createSavedPostDto: CreateSavedPostDto,
+  ) {
+    return this.savedPostService.create(req.user.id, createSavedPostDto);
   }
 
   @Get()
-  findAll() {
-    return this.savedPostService.findAll();
+  findAll(@Req() req: RequestWithUser) {
+    return this.savedPostService.findAll(req.user.id);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.savedPostService.findOne(+id);
+  @Get('status/:postId')
+  getStatus(
+    @Req() req: RequestWithUser,
+    @Param('postId', ParseIntPipe) postId: number,
+  ) {
+    return this.savedPostService.getStatus(req.user.id, postId);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateSavedPostDto: UpdateSavedPostDto) {
-    return this.savedPostService.update(+id, updateSavedPostDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.savedPostService.remove(+id);
+  @Delete(':postId')
+  remove(
+    @Req() req: RequestWithUser,
+    @Param('postId', ParseIntPipe) postId: number,
+  ) {
+    return this.savedPostService.remove(req.user.id, postId);
   }
 }

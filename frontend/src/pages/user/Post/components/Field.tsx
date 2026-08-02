@@ -4,15 +4,18 @@ function Field({
   label,
   required,
   error,
+  visible = true,
   className = "",
   children,
 }: {
   label: string;
   required?: boolean;
   error?: string;
+  visible?: boolean;
   className?: string;
   children: ReactNode;
 }) {
+  if (!visible) return null;
   return (
     <label className={`block ${className}`}>
       <span className="mb-2 block text-[1.4rem] font-medium text-gray-700">

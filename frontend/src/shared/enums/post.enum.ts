@@ -2,6 +2,7 @@ export const PostStatus = {
   PENDING: "pending",
   ACTIVE: "active",
   SOLD: "sold",
+  HIDDEN: "hidden",
   REJECTED: "rejected",
 } as const;
 

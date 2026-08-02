@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { UserService } from 'src/modules/user/user.service';
 import { Request } from 'express';
 import { AuthService } from '../auth.service';
+import { UserStatus } from 'src/shared';
 
 export interface JwtPayload {
   sub: string;
@@ -50,6 +51,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
     const user = await this.userService.findUserById(Number(payload.sub));
     if (!user) throw new UnauthorizedException('Người dùng không tồn tại!');
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('Tài khoản đã bị khóa!');
+    }
+    if (!user.isVerified) {
+      throw new UnauthorizedException('Tài khoản chưa được xác minh email!');
+    }
     if (payload.sessionId) {
       const isSessionActive = await this.authService.isSessionActive(
         payload.sessionId,

@@ -1,6 +1,7 @@
 import {
   UserGender,
   UserRole,
+  SellerType,
   UserStatus,
   UserTwoFactorMethod,
 } from 'src/shared';
@@ -25,6 +26,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { UserSession } from 'src/modules/user_session/entities/user_session.entity';
+import { ProfessionalSellerProfile } from 'src/modules/professional_seller/entities/professional_seller_profile.entity';
 
 @Entity('users')
 @Index(['status', 'role'])
@@ -43,8 +45,11 @@ export class User {
   password?: string;
 
   @Index()
-  @Column({ type: 'varchar', length: 12, nullable: true })
+  @Column({ type: 'varchar', length: 16, nullable: true, unique: true })
   phone?: string;
+
+  @Column({ nullable: true })
+  phoneVerifiedAt?: Date;
 
   @Column({ nullable: true })
   avatar?: string;
@@ -62,8 +67,15 @@ export class User {
   @Column({ type: 'enum', enum: UserRole, default: UserRole.USER })
   role: UserRole;
 
+  @Index()
+  @Column({ type: 'enum', enum: SellerType, default: SellerType.INDIVIDUAL })
+  sellerType: SellerType;
+
   @Column({ type: 'enum', enum: UserStatus, default: UserStatus.ACTIVE })
   status: UserStatus;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  banReason?: string;
 
   @Index()
   @Column({
@@ -139,4 +151,7 @@ export class User {
 
   @OneToMany(() => UserSession, (user_session) => user_session.user)
   user_session: UserSession[];
+
+  @OneToOne(() => ProfessionalSellerProfile, (profile) => profile.user)
+  professionalSellerProfile?: ProfessionalSellerProfile;
 }

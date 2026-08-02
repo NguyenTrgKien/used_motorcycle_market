@@ -30,6 +30,7 @@ import { VerifyPasswordDto } from './dto/verify-password.dto';
 import { TwoFactorSendOtpDto } from './dto/two-factor-send-otp.dto';
 import { Verify2FaOtpDto } from './dto/verify-2fa-otp.dto';
 import { VerifyLoginOtpDto } from './dto/verify-login-otp.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 
 export interface RequestWithUser extends ExpressRequest {
   user: User;
@@ -59,8 +60,8 @@ export class AuthController {
       httpOnly: true,
       // secure: true,
       // sameSite: 'none' as const,
-      secure: false,
-      sameSite: 'lax' as const,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
     };
 
     res.cookie('access_token', result.access_token, {
@@ -146,10 +147,10 @@ export class AuthController {
   }
 
   // Resend verify account otp
+  @Public()
   @Post('/resend-verification-otp')
-  resendVerificationOtp(@Req() req: RequestWithUser) {
-    const user = req.user;
-    return this.authService.resendVerificationOtp(user);
+  resendVerificationOtp(@Body() data: ResendVerificationDto) {
+    return this.authService.resendVerificationOtp(data.email);
   }
 
   // validate password and send otp
@@ -196,16 +197,16 @@ export class AuthController {
       httpOnly: true,
       // secure: true,
       // sameSite: 'none',
-      secure: false,
-      sameSite: 'lax' as const,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
     });
 
     res.clearCookie('refresh_token', {
       httpOnly: true,
       // secure: true,
       // sameSite: 'none',
-      secure: false,
-      sameSite: 'lax' as const,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
     });
 
     return res.json({
@@ -291,8 +292,8 @@ export class AuthController {
 
     res.cookie('access_token', result.access_token, {
       httpOnly: true,
-      secure: false,
-      sameSite: 'lax' as const,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -327,16 +328,16 @@ export class AuthController {
       httpOnly: true,
       // secure: true,
       // sameSite: 'none',
-      secure: false,
-      sameSite: 'lax' as const,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
     });
 
     res.clearCookie('refresh_token', {
       httpOnly: true,
       // secure: true,
       // sameSite: 'none',
-      secure: false,
-      sameSite: 'lax' as const,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
     });
 
     return res.json({
@@ -378,14 +379,14 @@ export class AuthController {
 
     res.clearCookie('access_token', {
       httpOnly: true,
-      secure: false,
-      sameSite: 'lax' as const,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
     });
 
     res.clearCookie('refresh_token', {
       httpOnly: true,
-      secure: false,
-      sameSite: 'lax' as const,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
     });
 
     return res.json({
@@ -412,8 +413,8 @@ export class AuthController {
       httpOnly: true,
       // secure: true,
       // sameSite: 'none' as const,
-      secure: false,
-      sameSite: 'lax' as const,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
     };
 
     res.cookie('access_token', result.access_token, {

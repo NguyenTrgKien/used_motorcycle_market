@@ -5,6 +5,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   OneToMany,
@@ -12,6 +13,11 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
+@Index('IDX_conversations_buyer_updated', ['buyerId', 'updatedAt'])
+@Index('IDX_conversations_seller_updated', ['sellerId', 'updatedAt'])
+@Index('IDX_conversations_pair_post', ['buyerId', 'sellerId', 'postId'], {
+  unique: true,
+})
 @Entity('conversations')
 export class Conversation {
   @PrimaryGeneratedColumn()
@@ -26,10 +32,19 @@ export class Conversation {
   @Column()
   postId: number;
 
-  @CreateDateColumn()
+  @Column({ type: 'text', nullable: true })
+  lastMessage: string;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  lastMessageAt: Date;
+
+  @Column({ nullable: true })
+  lastSenderId: number;
+
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 
   @OneToMany(() => Message, (message) => message.conversation)

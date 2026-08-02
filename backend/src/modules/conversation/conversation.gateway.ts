@@ -135,7 +135,7 @@ export class ConversationGateway implements OnGatewayConnection {
     const payload = {
       conversationId: conversation.id,
       senderId: message.senderId,
-      lastMessage: message.content,
+      lastMessage: this.getLastMessageText(message),
       lastMessageAt: message.createdAt,
       updatedAt: message.createdAt,
     };
@@ -162,5 +162,12 @@ export class ConversationGateway implements OnGatewayConnection {
 
   private getUserRoom(userId: number) {
     return `user:${userId}`;
+  }
+
+  private getLastMessageText(message: MessagePayload) {
+    if (message.messageType === 'image') return '[Hình ảnh]';
+    if (message.messageType === 'file') return '[Tệp đính kèm]';
+
+    return message.content;
   }
 }

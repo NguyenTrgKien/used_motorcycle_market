@@ -2,10 +2,11 @@ import {
   faCircleUser,
   faClock,
   faEdit,
-  faHeart,
   faKey,
   faLocationDot,
   faShield,
+  faStore,
+  faIdCard,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { AnimatePresence } from "framer-motion";
@@ -33,13 +34,19 @@ const personalMenus = [
   },
   {
     id: 3,
-    title: "Tin đã lưu",
-    icon: faHeart,
-    link: "save-listing",
+    title: "Người bán chuyên",
+    icon: faStore,
+    link: "professional-seller",
   },
 ];
 
 const securityMenus = [
+  {
+    id: 4,
+    title: "Xác minh danh tính",
+    icon: faIdCard,
+    link: "identity-verification",
+  },
   {
     id: 1,
     title: "Bảo mật & quyền riêng tư",
@@ -77,9 +84,11 @@ function Setting() {
   const handleSendOtp = async () => {
     try {
       setIsResend(true);
-      await axiosInstance.post("/api/v1/auth/resend-verification-otp");
+      await axiosInstance.post("/api/v1/auth/resend-verification-otp", {
+        email: user.email,
+      });
       navigate("/verify-otp");
-      sessionStorage.setItem("pendingVerify", "true");
+      sessionStorage.setItem("pendingVerify", user.email);
     } catch (error: any) {
       toast.error(
         error.response?.data?.message ||
@@ -91,7 +100,7 @@ function Setting() {
   };
 
   return (
-    <div className="flex gap-[2rem] pt-[8.5rem] px-[10rem]">
+    <div className="flex gap-[2rem] pt-[2rem] px-[20rem]">
       <div className="w-[30rem] h-auto border border-gray-200 rounded-xl bg-white p-[2rem]">
         {isLoading ? (
           <div className="text-center pb-[2rem] mb-[2rem] border-b border-b-gray-200">

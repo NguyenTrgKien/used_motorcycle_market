@@ -9,6 +9,7 @@ import {
   faClockRotateLeft,
   faGear,
   faKey,
+  faLocationDot,
   faMagnifyingGlass,
   faRightFromBracket,
   faSearch,
@@ -23,15 +24,43 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { io, Socket } from "socket.io-client";
 import HeaderBanner from "../components/HeaderBanner";
 import LoginAndRegisterModal from "../components/auth/Login&RegisterModal";
 import { useUser } from "../hooks/useUser";
 import { useAuth } from "../hooks/useAuth";
 import ChooseAddress from "../components/ChooseAdress";
 import useAuthModal from "../hooks/useAuthModal";
+import axiosInstance from "../configs/axiosInstance";
+import { useLocationSelection } from "../contexts/LocationContext";
+import {
+  NotificationType,
+  type NotificationType as NotificationTypeValue,
+} from "../shared";
+import CategoryMenuPopup from "../components/CategoryMenuPopup";
+
+interface HeaderNotification {
+  id: number;
+  title: string;
+  content: string;
+  isRead: boolean;
+  type: NotificationTypeValue;
+  referenceId: number;
+  createdAt: string;
+}
+
+interface HeaderNotificationsResponse {
+  data: HeaderNotification[];
+  unreadCount: number;
+}
 
 const utilities = [
-  { id: 1, title: "Tin đăng đã lưu", icon: faHeart, link: "/saved-posts" },
+  {
+    id: 1,
+    title: "Tin đăng đã lưu",
+    icon: faHeart,
+    link: "/saved-listings",
+  },
   {
     id: 2,
     title: "Tìm kiếm đã lưu",
@@ -41,7 +70,7 @@ const utilities = [
   {
     id: 3,
     title: "Thông báo",
-    icon: faMagnifyingGlass,
+    icon: faBell,
     link: "/notifications",
   },
   {
@@ -73,20 +102,37 @@ function Header() {
   const navigate = useNavigate();
   const { user } = useUser();
   const { logout } = useAuth();
+  const { location: selectedLocation } = useLocationSelection();
   const { isOpen, openAuthModal, closeAuthModal } = useAuthModal();
   const location = useLocation();
   const isFixedHard =
     location.pathname.startsWith("/setting") ||
     location.pathname.startsWith("/users") ||
     location.pathname.startsWith("/messages") ||
+    location.pathname.startsWith("/notifications") ||
+    location.pathname.startsWith("/saved-listings") ||
+    location.pathname.startsWith("/vehicles") ||
     location.pathname.startsWith("/posts");
   const [showPopup, setShowPopup] = useState(false);
   const elementRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
+  const notificationSocketRef = useRef<Socket | null>(null);
   const elementAreaRef = useRef<HTMLDivElement>(null);
   const elementAreaMobileRef = useRef<HTMLDivElement>(null);
+  const headerLocationRef = useRef<HTMLDivElement>(null);
+  const categoryMenuRef = useRef<HTMLDivElement>(null);
   const [isFixed, setIsFixed] = useState(false);
   const [showPopupArea, setShowPopupArea] = useState(false);
+  const [showHeaderLocation, setShowHeaderLocation] = useState(false);
+  const [showCategoryMenu, setShowCategoryMenu] = useState(false);
   const [showMenuBar, setShowMenuBar] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [notifications, setNotifications] = useState<HeaderNotification[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState(
+    () => new URLSearchParams(window.location.search).get("keyword") || "",
+  );
 
   useEffect(() => {
     const handleClickOutSide = (e: MouseEvent) => {
@@ -97,33 +143,196 @@ function Header() {
         setShowPopup(false);
       }
       if (
-        elementAreaRef.current &&
-        !elementAreaRef.current.contains(e.target as Node) &&
-        elementAreaMobileRef.current &&
-        !elementAreaMobileRef.current.contains(e.target as Node)
+        notificationRef.current &&
+        !notificationRef.current.contains(e.target as Node)
+      ) {
+        setShowNotifications(false);
+      }
+      if (
+        categoryMenuRef.current &&
+        !categoryMenuRef.current.contains(e.target as Node)
+      ) {
+        setShowCategoryMenu(false);
+      }
+      const locationContainers = [
+        elementAreaRef.current,
+        elementAreaMobileRef.current,
+        headerLocationRef.current,
+      ].filter(Boolean) as HTMLDivElement[];
+      if (
+        !locationContainers.some((container) =>
+          container.contains(e.target as Node),
+        )
       ) {
         setShowPopupArea(false);
+        setShowHeaderLocation(false);
       }
     };
-    document.addEventListener("click", handleClickOutSide);
-    return () => document.removeEventListener("click", handleClickOutSide);
+    document.addEventListener("mousedown", handleClickOutSide);
+    return () => document.removeEventListener("mousedown", handleClickOutSide);
   }, []);
 
   useEffect(() => {
     const handleScroll = () => setIsFixed(window.scrollY > 150);
-    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  useEffect(() => {
+    setSearchKeyword(
+      new URLSearchParams(location.search).get("keyword") || "",
+    );
+  }, [location.search]);
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      if (!user) {
+        setUnreadNotifications(0);
+        setNotifications([]);
+        return;
+      }
+
+      try {
+        setIsLoadingNotifications(true);
+        const res = await axiosInstance.get<HeaderNotificationsResponse>(
+          "/api/v1/notifications",
+        );
+        setNotifications(res.data.data || []);
+        setUnreadNotifications(res.data.unreadCount || 0);
+      } catch {
+        setNotifications([]);
+        setUnreadNotifications(0);
+      } finally {
+        setIsLoadingNotifications(false);
+      }
+    };
+
+    void fetchNotifications();
+  }, [user]);
+
   const handleLogout = async () => await logout();
 
-  const handleSearchMotor = () => {};
+  const handleSearchMotor = () => {
+    const searchParams = new URLSearchParams();
+    const keyword = searchKeyword.trim();
+
+    if (keyword) {
+      searchParams.set("keyword", keyword);
+    }
+    if (selectedLocation?.province) {
+      searchParams.set("province", selectedLocation.province);
+    }
+
+    const query = searchParams.toString();
+    navigate(query ? `/vehicles?${query}` : "/vehicles");
+  };
+
+  const formatNotificationDate = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+
+    return date.toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
+
+  const getNotificationPath = (notification: HeaderNotification) => {
+    const paths: Record<NotificationTypeValue, string> = {
+      [NotificationType.POST_APPROVED]: "/posts/manage",
+      [NotificationType.POST_REJECTED]: "/posts/manage",
+      [NotificationType.NEW_MESSAGE]: "/messages",
+      [NotificationType.NEW_REVIEW]: "/my-reviews",
+      [NotificationType.NEW_POST_PENDING]: "/admin/posts/pending",
+      [NotificationType.BANK_TRANSFER_SUBMITTED]: "/admin/transactions",
+      [NotificationType.BANK_TRANSFER_REJECTED]: "/posts/manage",
+      [NotificationType.BANK_TRANSFER_CONFIRMED]: "/posts/manage",
+    };
+
+    return paths[notification.type] || "/notifications";
+  };
+
+  const handleOpenNotifications = () => {
+    if (!user) {
+      openAuthModal();
+      return;
+    }
+
+    setShowNotifications((prev) => !prev);
+    setShowPopup(false);
+  };
+
+  const handleOpenNotification = async (notification: HeaderNotification) => {
+    if (!notification.isRead) {
+      setNotifications((prev) =>
+        prev.map((item) =>
+          item.id === notification.id ? { ...item, isRead: true } : item,
+        ),
+      );
+      setUnreadNotifications((prev) => Math.max(prev - 1, 0));
+
+      try {
+        await axiosInstance.patch(
+          `/api/v1/notifications/${notification.id}/read`,
+        );
+      } catch {
+        setNotifications((prev) =>
+          prev.map((item) =>
+            item.id === notification.id ? { ...item, isRead: false } : item,
+          ),
+        );
+        setUnreadNotifications((prev) => prev + 1);
+        return;
+      }
+    }
+
+    setShowNotifications(false);
+    navigate(getNotificationPath(notification));
+  };
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const socket = io("http://localhost:8080", {
+      withCredentials: true,
+    });
+
+    notificationSocketRef.current = socket;
+
+    socket.on("notification.created", (notification: HeaderNotification) => {
+      setNotifications((prev) => {
+        const exists = prev.some((item) => item.id === notification.id);
+
+        if (exists) return prev;
+
+        return [notification, ...prev].slice(0, 50);
+      });
+
+      if (!notification.isRead) {
+        setUnreadNotifications((prev) => prev + 1);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+      notificationSocketRef.current = null;
+    };
+  }, [user?.id]);
 
   return (
     <>
       <div
-        className={`${isFixed && isFixedHard ? "md:h-[15rem]" : "hidden"}`}
-      ></div>
+        aria-hidden="true"
+        className={
+          isFixedHard
+            ? "h-[6.5rem]"
+            : isFixed
+              ? "h-[15rem] md:h-[18rem]"
+              : "hidden"
+        }
+      />
       <header
         className={`${isFixed || isFixedHard ? "fixed top-0 left-0 z-50" : "relative"} w-full`}
       >
@@ -151,44 +360,210 @@ function Header() {
                 className="w-[10rem] h-[4rem] md:w-[11rem] lg:w-[12rem] md:h-[4rem] lg:h-[5rem] select-none rounded-full"
               />
             </a>
-            <div className="hidden md:flex items-center gap-1 cursor-pointer">
-              <FontAwesomeIcon icon={faTableCells} className="text-[1.8rem]" />
-              <span>Danh mục</span>
+            <div ref={categoryMenuRef} className="relative hidden md:block">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCategoryMenu((prev) => !prev);
+                  setShowHeaderLocation(false);
+                  setShowNotifications(false);
+                  setShowPopup(false);
+                }}
+                className="flex items-center gap-1 cursor-pointer"
+              >
+                <FontAwesomeIcon
+                  icon={faTableCells}
+                  className="text-[1.8rem]"
+                />
+                <span>Danh mục</span>
+                <FontAwesomeIcon
+                  icon={faAngleDown}
+                  className={`ml-1 text-[1.2rem] transition-transform ${
+                    showCategoryMenu ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              <AnimatePresence>
+                {showCategoryMenu && (
+                  <CategoryMenuPopup
+                    onClose={() => setShowCategoryMenu(false)}
+                  />
+                )}
+              </AnimatePresence>
             </div>
+
+            {(isFixed || isFixedHard) && (
+              <div ref={headerLocationRef} className="relative hidden md:block">
+                <button
+                  type="button"
+                  onClick={() => setShowHeaderLocation((prev) => !prev)}
+                  className="flex max-w-[18rem] items-center gap-2"
+                >
+                  <FontAwesomeIcon
+                    icon={faLocationDot}
+                    className="text-[1.8rem]"
+                  />
+                  <span className="truncate">
+                    {selectedLocation?.province || "Chọn khu vực"}
+                  </span>
+                  <FontAwesomeIcon icon={faAngleDown} />
+                </button>
+                <AnimatePresence>
+                  {showHeaderLocation && (
+                    <ChooseAddress
+                      onClose={() => setShowHeaderLocation(false)}
+                    />
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
 
           {(isFixed || isFixedHard) && (
-            <div className="hidden sm:flex flex-1 mx-4 md:mx-6 max-w-[45rem] h-[4rem] relative">
+            <form
+              className="hidden sm:flex flex-1 mx-4 md:mx-6 max-w-[45rem] h-[4rem] relative"
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleSearchMotor();
+              }}
+            >
               <input
                 type="text"
+                value={searchKeyword}
+                onChange={(event) => setSearchKeyword(event.target.value)}
                 className="w-full h-full border border-gray-300 rounded-full focus:border-orange-500 outline-none pl-[2rem] pr-[5rem]"
                 placeholder="Xin chào! Hôm này bạn cần tìm gì?"
               />
-              <button className="absolute top-0 right-0 w-[5rem] h-[4rem] flex items-center justify-center cursor-pointer text-gray-500">
+              <button
+                type="submit"
+                className="absolute top-0 right-0 w-[5rem] h-[4rem] flex items-center justify-center cursor-pointer text-gray-500"
+              >
                 <FontAwesomeIcon icon={faSearch} />
               </button>
-            </div>
+            </form>
           )}
 
           <div className="flex items-center gap-4 sm:gap-6 shrink-0">
-            <button className="relative hidden sm:block cursor-pointer">
+            <button
+              type="button"
+              onClick={() =>
+                user ? navigate("/saved-listings") : openAuthModal()
+              }
+              className="relative hidden sm:block cursor-pointer"
+            >
               <FontAwesomeIcon icon={faHeart} className="text-[2.2rem]" />
             </button>
-            <button className="relative cursor-pointer">
-              <FontAwesomeIcon icon={faBell} className="text-[2.2rem]" />
-              <span className="absolute -top-3 -right-3 w-6 h-6 flex items-center justify-center text-[1rem] text-white bg-red-500 rounded-full">
-                1
-              </span>
-            </button>
+            <div className="relative" ref={notificationRef}>
+              <button
+                type="button"
+                onClick={handleOpenNotifications}
+                className="relative cursor-pointer"
+              >
+                <FontAwesomeIcon icon={faBell} className="text-[2.2rem]" />
+                {unreadNotifications > 0 && (
+                  <span className="absolute -top-3 -right-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-red-500 px-1 text-[1rem] text-white">
+                    {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                  </span>
+                )}
+              </button>
+
+              <AnimatePresence>
+                {showNotifications && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    className="absolute right-[-7rem] top-[calc(100%+1.6rem)] z-[999] w-[calc(100vw-2rem)] max-w-[38rem] overflow-hidden rounded-xl border border-gray-200 bg-white text-gray-700 shadow-xl sm:right-0"
+                  >
+                    <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+                      <div>
+                        <p className="font-semibold text-gray-900">Thông báo</p>
+                        <p className="text-[1.4rem] text-gray-500">
+                          {unreadNotifications} thông báo chưa đọc
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowNotifications(false);
+                          navigate("/notifications");
+                        }}
+                        className="text-[1.4rem] font-medium text-orange-600 hover:underline transition-colors"
+                      >
+                        Xem tất cả
+                      </button>
+                    </div>
+
+                    <div className="max-h-[34rem] overflow-y-auto">
+                      {isLoadingNotifications ? (
+                        <div className="space-y-3 p-5">
+                          {Array.from({ length: 3 }).map((_, index) => (
+                            <div key={index} className="flex gap-3">
+                              <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200" />
+                              <div className="flex-1 space-y-2">
+                                <div className="h-4 w-3/4 animate-pulse rounded bg-gray-200" />
+                                <div className="h-3 w-full animate-pulse rounded bg-gray-100" />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : notifications.length === 0 ? (
+                        <div className="p-8 text-center text-gray-500">
+                          Chưa có thông báo
+                        </div>
+                      ) : (
+                        notifications.slice(0, 7).map((notification) => (
+                          <button
+                            key={notification.id}
+                            type="button"
+                            onClick={() =>
+                              void handleOpenNotification(notification)
+                            }
+                            className={`flex w-full gap-3 border-b border-gray-100 px-5 py-4 text-left transition-colors last:border-b-0 hover:bg-orange-50 ${
+                              notification.isRead
+                                ? "bg-white"
+                                : "bg-orange-50/70"
+                            }`}
+                          >
+                            <span className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600">
+                              <FontAwesomeIcon icon={faBell} />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-start justify-between gap-3">
+                                <span className="line-clamp-1 font-semibold text-gray-900">
+                                  {notification.title}
+                                </span>
+                                {!notification.isRead && (
+                                  <span className="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-orange-500" />
+                                )}
+                              </span>
+                              <span className="mt-1 line-clamp-2 text-[1.3rem] text-gray-600">
+                                {notification.content}
+                              </span>
+                              <span className="mt-2 block text-[1.2rem] text-gray-400">
+                                {formatNotificationDate(notification.createdAt)}
+                              </span>
+                            </span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
             <button
-              onClick={() => navigate("/messages")}
+              onClick={() => (user ? navigate("/messages") : openAuthModal())}
               className={`hidden lg:flex items-center gap-1 px-5 h-[4rem] rounded-full ${!isFixed && !isFixedHard ? "bg-white text-gray-600" : "border border-gray-300"} hover:cursor-pointer`}
             >
               <FontAwesomeIcon icon={faCommentDots} />
               <span>Tin nhắn</span>
             </button>
             <button
-              onClick={() => navigate("/posts/manage")}
+              onClick={() =>
+                user ? navigate("/posts/manage") : openAuthModal()
+              }
               className={`hidden lg:block px-5 h-[4rem] rounded-full ${!isFixed && !isFixedHard ? "bg-white text-gray-600" : "border border-gray-300"} hover:cursor-pointer`}
             >
               Quản lý tin
@@ -258,6 +633,10 @@ function Header() {
                             return (
                               <div
                                 key={p.id}
+                                onClick={() => {
+                                  navigate(p.link);
+                                  setShowPopup(false);
+                                }}
                                 className={`flex items-center justify-between gap-2.5 px-8 py-6 hover:bg-gray-50 transition-colors duration-300 font-semibold hover:cursor-pointer ${index === utilities.length - 1 && "rounded-bl-3xl rounded-br-3xl"} ${index === 0 && "rounded-tl-3xl rounded-tr-3xl"}`}
                               >
                                 <div className="flex items-center gap-4">
@@ -265,9 +644,11 @@ function Header() {
                                   <p>{p.title}</p>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  {isNotify && (
-                                    <span className="w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center text-[1.2rem] font-normal">
-                                      1
+                                  {isNotify && unreadNotifications > 0 && (
+                                    <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-red-500 px-1 text-[1.2rem] font-normal text-white">
+                                      {unreadNotifications > 99
+                                        ? "99+"
+                                        : unreadNotifications}
                                     </span>
                                   )}
                                   <FontAwesomeIcon icon={faAngleRight} />
@@ -326,18 +707,31 @@ function Header() {
               Xe ưng ý đang chờ bạn đấy!
             </div>
 
-            <div className="flex items-center w-full lg:h-[8rem] md:h-[7rem] h-[5rem] relative">
-              <button className="absolute top-0 left-0 px-8 h-full text-gray-500 flex items-center justify-center">
+            <form
+              className="flex items-center w-full lg:h-[8rem] md:h-[7rem] h-[5rem] relative"
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleSearchMotor();
+              }}
+            >
+              <button
+                type="submit"
+                aria-label="Tìm xe"
+                className="absolute top-0 left-0 px-8 h-full text-gray-500 flex items-center justify-center"
+              >
                 <FontAwesomeIcon icon={faSearch} />
               </button>
               <input
                 type="text"
+                value={searchKeyword}
+                onChange={(event) => setSearchKeyword(event.target.value)}
                 className="flex-1 h-full outline-none pl-[5.5rem] pr-3 min-w-0"
                 placeholder="Xin chào! Hôm này bạn cần tìm gì?"
               />
               <div className="relative flex items-center gap-2 sm:gap-5 justify-end pr-[1.5rem] sm:pr-[3rem] shrink-0">
                 <div className="relative hidden lg:block" ref={elementAreaRef}>
                   <button
+                    type="button"
                     className="flex items-center justify-between w-[20rem] h-[4.5rem] text-start rounded-md bg-white border border-gray-300 px-6 outline-none cursor-pointer"
                     onClick={() => setShowPopupArea((prev) => !prev)}
                   >
@@ -345,17 +739,19 @@ function Header() {
                     <FontAwesomeIcon icon={faAngleDown} />
                   </button>
                   <AnimatePresence>
-                    {showPopupArea && <ChooseAddress />}
+                    {showPopupArea && (
+                      <ChooseAddress onClose={() => setShowPopupArea(false)} />
+                    )}
                   </AnimatePresence>
                 </div>
                 <button
+                  type="submit"
                   className="px-4 sm:px-6 h-[4rem] lg:h-[4.5rem] rounded-md bg-orange-400 hover:bg-orange-500 text-white transition-colors duration-300 text-nowrap"
-                  onClick={handleSearchMotor}
                 >
                   Tìm xe
                 </button>
               </div>
-            </div>
+            </form>
 
             <div
               className="lg:hidden border-t border-gray-100 px-4 py-3"
@@ -369,7 +765,9 @@ function Header() {
                 <FontAwesomeIcon icon={faAngleDown} />
               </button>
               <AnimatePresence>
-                {showPopupArea && <ChooseAddress />}
+                {showPopupArea && (
+                  <ChooseAddress onClose={() => setShowPopupArea(false)} />
+                )}
               </AnimatePresence>
             </div>
           </div>
@@ -436,7 +834,11 @@ function Header() {
                     </div>
                     <div
                       onClick={() => {
-                        navigate("/posts/manage");
+                        if (user) {
+                          navigate("/posts/manage");
+                        } else {
+                          openAuthModal();
+                        }
                         setShowMenuBar(false);
                       }}
                       className={`flex items-center justify-between gap-2.5 px-8 hover:bg-gray-50 transition-colors duration-300 font-semibold hover:cursor-pointer `}
@@ -450,7 +852,11 @@ function Header() {
                     </div>
                     <div
                       onClick={() => {
-                        navigate("/messages");
+                        if (user) {
+                          navigate("/messages");
+                        } else {
+                          openAuthModal();
+                        }
                         setShowMenuBar(false);
                       }}
                       className={`flex items-center justify-between gap-2.5 px-8 hover:bg-gray-50 transition-colors duration-300 font-semibold hover:cursor-pointer `}

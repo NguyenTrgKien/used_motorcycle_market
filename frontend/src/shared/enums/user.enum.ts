@@ -1,5 +1,7 @@
 export const UserRole = {
   ADMIN: "admin",
+  MODERATOR: "moderator",
+  CSKH: "cskh",
   USER: "user",
 } as const;
 
@@ -11,6 +13,23 @@ export const UserStatus = {
 } as const;
 
 export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
+
+export const SellerType = {
+  INDIVIDUAL: "individual",
+  PROFESSIONAL: "professional",
+} as const;
+
+export type SellerType = (typeof SellerType)[keyof typeof SellerType];
+
+export const ProfessionalSellerStatus = {
+  PENDING: "pending",
+  APPROVED: "approved",
+  REJECTED: "rejected",
+  SUSPENDED: "suspended",
+} as const;
+
+export type ProfessionalSellerStatus =
+  (typeof ProfessionalSellerStatus)[keyof typeof ProfessionalSellerStatus];
 
 export const UserGender = {
   MALE: "male",

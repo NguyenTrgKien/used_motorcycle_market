@@ -61,8 +61,9 @@ export class CreatePostDto {
   @IsNumberString()
   modelId?: string;
 
+  @IsOptional()
   @IsEnum(VehicleBodyType)
-  bodyType: VehicleBodyType;
+  bodyType?: VehicleBodyType;
 
   @IsOptional()
   @IsNumberString()
@@ -80,8 +81,9 @@ export class CreatePostDto {
   @IsString()
   color?: string;
 
+  @IsOptional()
   @IsEnum(VehicleCondition)
-  condition: VehicleCondition;
+  condition?: VehicleCondition;
 
   @IsOptional()
   @IsString()
@@ -103,11 +105,13 @@ export class CreatePostDto {
   @IsString()
   licensePlate?: string;
 
+  @IsOptional()
   @IsEnum(VehicleFuelType)
-  fuelType: VehicleFuelType;
+  fuelType?: VehicleFuelType;
 
+  @IsOptional()
   @IsEnum(VehicleTransmission)
-  transmission: VehicleTransmission;
+  transmission?: VehicleTransmission;
 
   @IsOptional()
   @IsString()

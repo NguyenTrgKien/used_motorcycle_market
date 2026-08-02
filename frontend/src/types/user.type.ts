@@ -1,4 +1,9 @@
-import type { UserGender, UserRole, UserStatus } from "../shared";
+import type {
+  SellerType,
+  UserGender,
+  UserRole,
+  UserStatus,
+} from "../shared";
 import type { UserAddressType } from "./address.type";
 
 export interface UserType {
@@ -14,8 +19,10 @@ export interface UserType {
   personalInfo?: string;
   gender: UserGender;
   role: UserRole;
+  sellerType: SellerType;
   status: UserStatus;
   isVerified: boolean;
+  isPhoneVerified: boolean;
   isGoogleLinked: boolean;
   hasPassword: boolean;
   hasSeenCreatePostGuide: boolean;

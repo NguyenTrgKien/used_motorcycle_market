@@ -4,14 +4,18 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { CreateCategoryDto } from './dto/create-category.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Category } from './entities/category.entity';
-import { Repository } from 'typeorm';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import slugify from 'slugify';
-import { UpdateCategoryDto } from './dto/update-category.dto';
+import { Repository } from 'typeorm';
 import { CategoryStatus } from 'src/shared';
+import { CreateCategoryDto } from './dto/create-category.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
+import { Category } from './entities/category.entity';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import {
+  getDefaultListingFormSchema,
+  normalizeListingFormSchema,
+} from './listing-form-schema';
 
 @Injectable()
 export class CategoryService {
@@ -21,16 +25,17 @@ export class CategoryService {
     private readonly cloudinaryService: CloudinaryService,
   ) {}
 
-  private async generateUniqueSlug(
-    name: string,
-    excludeId?: number,
-  ): Promise<string> {
-    const baseSlug = slugify(name, {
-      lower: true,
-      locale: 'vi',
-      strict: true,
-    });
+  private async uploadImage(image?: Express.Multer.File) {
+    if (!image) return undefined;
+    if (!image.mimetype.startsWith('image/')) {
+      throw new BadRequestException('Ảnh danh mục phải là hình ảnh');
+    }
+    return this.cloudinaryService.uploadSingleFile(image);
+  }
 
+  private async generateUniqueSlug(name: string, excludeId?: number) {
+    const baseSlug =
+      slugify(name, { lower: true, locale: 'vi', strict: true }) || 'danh-muc';
     let slug = baseSlug;
     let count = 1;
 
@@ -43,61 +48,46 @@ export class CategoryService {
         query.andWhere('category.id != :id', { id: excludeId });
       }
 
-      const exist = await query.getOne();
-      if (!exist) break;
+      const exists = await query.getOne();
+      if (!exists) return slug;
 
-      slug = `${baseSlug}-${count + 1}`;
       count++;
+      slug = `${baseSlug}-${count}`;
     }
-
-    return slug;
   }
 
   async create(
     createCategoryDto: CreateCategoryDto,
-    image: Express.Multer.File,
+    image?: Express.Multer.File,
   ) {
     try {
-      const { name, description, icon } = createCategoryDto;
-      const existCate = await this.categoryRepo.findOne({
-        where: {
-          name,
-        },
-      });
-      if (existCate) {
-        throw new BadRequestException('Danh mục đã tồn tại!');
-      }
-      let publicId: string | undefined;
-      let imageUrl: string | undefined;
-      if (image) {
-        const uploadResult =
-          await this.cloudinaryService.uploadSingleFile(image);
-        publicId = uploadResult.publicId;
-        imageUrl = uploadResult.url;
-      }
+      const name = createCategoryDto.name.trim();
+      if (!name)
+        throw new BadRequestException('Tên danh mục không được để trống');
 
+      const exists = await this.categoryRepo.findOne({ where: { name } });
+      if (exists) throw new BadRequestException('Danh mục đã tồn tại');
+
+      const uploadedImage = await this.uploadImage(image);
       const slug = await this.generateUniqueSlug(name);
-
-      const newCategory = this.categoryRepo.create({
+      const category = this.categoryRepo.create({
         name,
-        description,
+        description: createCategoryDto.description?.trim() || undefined,
+        image: uploadedImage?.url,
+        imagePublicId: uploadedImage?.publicId,
         slug,
-        ...(publicId && { publicId }),
-        ...(icon ? { icon: icon } : {}),
-        ...(image ? { image: imageUrl } : {}),
+        listingFormSchema: getDefaultListingFormSchema(slug),
       });
 
-      await this.categoryRepo.save(newCategory);
+      await this.categoryRepo.save(category);
 
       return {
-        message: 'Thêm danh mục thành công!',
+        message: 'Thêm danh mục thành công',
+        data: category,
       };
     } catch (error) {
-      console.log('=============================>', error);
+      if (error instanceof BadRequestException) throw error;
       const err = error as Error;
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
       throw new InternalServerErrorException(`Lỗi server: ${err.message}`);
     }
   }
@@ -108,54 +98,55 @@ export class CategoryService {
     image?: Express.Multer.File,
   ) {
     try {
-      const category = await this.categoryRepo.findOne({
-        where: {
-          id,
-        },
-      });
+      const category = await this.categoryRepo.findOne({ where: { id } });
+      if (!category) throw new NotFoundException('Không tìm thấy danh mục');
 
-      if (!category) {
-        throw new NotFoundException('Không tìm thấy danh mục này!');
-      }
-
-      if (dataUpdate.name && dataUpdate.name !== category.name) {
-        const existName = await this.categoryRepo
-          .createQueryBuilder('category')
-          .where('category.name = :name', { name: dataUpdate.name })
-          .andWhere('category.id != :id', { id })
-          .getOne();
-        if (existName) {
-          throw new BadRequestException('Tên danh mục đã tồn tại!');
+      if (dataUpdate.name !== undefined) {
+        const name = dataUpdate.name.trim();
+        if (!name) {
+          throw new BadRequestException('Tên danh mục không được để trống');
         }
 
-        category.slug = await this.generateUniqueSlug(dataUpdate.name, id);
-        category.name = dataUpdate.name;
+        const exists = await this.categoryRepo
+          .createQueryBuilder('category')
+          .where('category.name = :name', { name })
+          .andWhere('category.id != :id', { id })
+          .getOne();
+
+        if (exists) throw new BadRequestException('Tên danh mục đã tồn tại');
+
+        if (name !== category.name) {
+          category.name = name;
+          category.slug = await this.generateUniqueSlug(name, id);
+        }
+      }
+
+      if (dataUpdate.description !== undefined) {
+        category.description = dataUpdate.description.trim();
       }
 
       if (image) {
-        if (category.publicId) {
-          await this.cloudinaryService.deleteFile(category.publicId);
+        const uploadedImage = await this.uploadImage(image);
+        if (category.imagePublicId) {
+          await this.cloudinaryService.deleteFile(category.imagePublicId);
         }
-        const uploadResult =
-          await this.cloudinaryService.uploadSingleFile(image);
-        category.publicId = uploadResult.publicId;
-        category.image = uploadResult.url;
-      }
-
-      if (dataUpdate.description) {
-        category.description = dataUpdate.description;
-      }
-      if (dataUpdate.icon) {
-        category.icon = dataUpdate.icon;
+        category.image = uploadedImage?.url;
+        category.imagePublicId = uploadedImage?.publicId;
+      } else if (dataUpdate.removeImage) {
+        if (category.imagePublicId) {
+          await this.cloudinaryService.deleteFile(category.imagePublicId);
+        }
+        category.image = undefined;
+        category.imagePublicId = undefined;
       }
 
       await this.categoryRepo.save(category);
 
       return {
-        message: 'Cập nhật danh mục thành công!',
+        message: 'Cập nhật danh mục thành công',
+        data: category,
       };
     } catch (error) {
-      console.log('=============================>', error);
       if (
         error instanceof NotFoundException ||
         error instanceof BadRequestException
@@ -169,15 +160,8 @@ export class CategoryService {
 
   async toggleActive(id: number) {
     try {
-      const category = await this.categoryRepo.findOne({
-        where: {
-          id,
-        },
-      });
-
-      if (!category) {
-        throw new NotFoundException('Không tìm thấy danh mục này!');
-      }
+      const category = await this.categoryRepo.findOne({ where: { id } });
+      if (!category) throw new NotFoundException('Không tìm thấy danh mục');
 
       category.status =
         category.status === CategoryStatus.ACTIVE
@@ -187,13 +171,14 @@ export class CategoryService {
       await this.categoryRepo.save(category);
 
       return {
-        message: `Danh mục đã được ${category.status === CategoryStatus.ACTIVE ? 'bật' : 'tắt'} hoạt động!`,
+        message:
+          category.status === CategoryStatus.ACTIVE
+            ? 'Đã bật danh mục'
+            : 'Đã tắt danh mục',
+        data: category,
       };
     } catch (error) {
-      console.log('=============================>', error);
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
+      if (error instanceof NotFoundException) throw error;
       const err = error as Error;
       throw new InternalServerErrorException(`Lỗi server: ${err.message}`);
     }
@@ -201,13 +186,21 @@ export class CategoryService {
 
   async getAllCategories() {
     try {
-      const categories = await this.categoryRepo.find();
+      const categories = await this.categoryRepo.find({
+        order: { createdAt: 'ASC' },
+      });
+
       return {
-        message: 'Lấy danh sách danh mục thành công!',
-        data: categories,
+        message: 'Lấy danh sách danh mục thành công',
+        data: categories.map((category) => ({
+          ...category,
+          listingFormSchema: normalizeListingFormSchema(
+            category.listingFormSchema,
+            category.slug,
+          ),
+        })),
       };
     } catch (error) {
-      console.log('=============================>', error);
       const err = error as Error;
       throw new InternalServerErrorException(`Lỗi server: ${err.message}`);
     }
@@ -215,27 +208,21 @@ export class CategoryService {
 
   async getCategoryBySlug(slug: string) {
     try {
-      const category = await this.categoryRepo.findOne({
-        where: {
-          slug,
-        },
-      });
-
-      if (!category) {
-        throw new NotFoundException('Không tìm thấy danh mục này!');
-      }
-
-      await this.categoryRepo.save(category);
+      const category = await this.categoryRepo.findOne({ where: { slug } });
+      if (!category) throw new NotFoundException('Không tìm thấy danh mục');
 
       return {
-        message: 'Lấy thông tin danh mục thành công!',
-        data: category,
+        message: 'Lấy thông tin danh mục thành công',
+        data: {
+          ...category,
+          listingFormSchema: normalizeListingFormSchema(
+            category.listingFormSchema,
+            category.slug,
+          ),
+        },
       };
     } catch (error) {
-      console.log('=============================>', error);
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
+      if (error instanceof NotFoundException) throw error;
       const err = error as Error;
       throw new InternalServerErrorException(`Lỗi server: ${err.message}`);
     }

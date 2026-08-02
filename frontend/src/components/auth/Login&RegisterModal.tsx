@@ -12,6 +12,8 @@ import { useUser } from "../../hooks/useUser";
 import { useQueryClient } from "@tanstack/react-query";
 import ForgotPass from "./ForgotPass";
 import ValidatePassword from "../../utils/validatePassword";
+import { useNavigate } from "react-router-dom";
+import { UserRole, type UserRole as UserRoleType } from "../../shared";
 
 interface LoginAndRegisterModalProp {
   onClose: () => void;
@@ -19,8 +21,13 @@ interface LoginAndRegisterModalProp {
 
 type Step = "form" | "otp" | "loginOtp" | "forgot";
 
+type LoginUser = {
+  role: UserRoleType;
+};
+
 function LoginAndRegisterModal({ onClose }: LoginAndRegisterModalProp) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
   const [showPass, setShowPass] = useState(false);
   const [step, setStep] = useState<Step>("form");
@@ -57,11 +64,23 @@ function LoginAndRegisterModal({ onClose }: LoginAndRegisterModalProp) {
   const [errMessage, setErrMessage] = useState("");
   const { refetchUser } = useUser();
 
-  const handleLoginSuccess = () => {
-    refetchUser();
+  const getRedirectPathByRole = (role?: UserRoleType) => {
+    if (role && role !== UserRole.USER) {
+      return "/admin";
+    }
+
+    return "/";
+  };
+
+  const handleLoginSuccess = async (user?: LoginUser) => {
+    if (user) {
+      queryClient.setQueryData(["user"], user);
+    }
+    await refetchUser();
     toast.success("Đăng nhập thành công!");
     queryClient.invalidateQueries({ queryKey: ["user"] });
     onClose();
+    navigate(getRedirectPathByRole(user?.role), { replace: true });
   };
 
   useEffect(() => {
@@ -110,7 +129,6 @@ function LoginAndRegisterModal({ onClose }: LoginAndRegisterModalProp) {
       let res;
       if (isLogin) {
         res = await axiosInstance.post("/api/v1/auth/login", dataRequest);
-        console.log(res);
 
         if (res.data?.two_factor_enabled) {
           setOtp("");
@@ -119,10 +137,10 @@ function LoginAndRegisterModal({ onClose }: LoginAndRegisterModalProp) {
           startCountdown();
           setCountDown(60);
           setCanResend(false);
-          toast.info("Mã OTP đã được gửi về email của bạn!");
+          toast.info(res.data?.message || "Mã OTP đăng nhập đã được gửi!");
           return;
         }
-        handleLoginSuccess();
+        await handleLoginSuccess(res.data?.user);
       } else {
         res = await axiosInstance.post("/api/v1/auth/register", dataRequest);
         if (res.status === 201) {
@@ -153,9 +171,15 @@ function LoginAndRegisterModal({ onClose }: LoginAndRegisterModalProp) {
         otp,
       });
       if (res.status === 201) {
-        refetchUser();
+        if (res.data?.user) {
+          queryClient.setQueryData(["user"], res.data.user);
+        }
+        await refetchUser();
         toast.success("Xác thực tài khoản thành công!");
         onClose();
+        navigate(getRedirectPathByRole(res.data?.user?.role), {
+          replace: true,
+        });
       }
     } catch {
       toast.error("OTP không đúng hoặc đã hết hạn!");
@@ -180,7 +204,7 @@ function LoginAndRegisterModal({ onClose }: LoginAndRegisterModalProp) {
         otp,
       });
       if (res.status >= 200 && res.status < 300) {
-        handleLoginSuccess();
+        await handleLoginSuccess(res.data?.user);
       }
     } catch (error: any) {
       toast.error(
@@ -198,10 +222,8 @@ function LoginAndRegisterModal({ onClose }: LoginAndRegisterModalProp) {
       if (step === "loginOtp") {
         await axiosInstance.post("/api/v1/auth/login", dataRequest);
       } else {
-        await axiosInstance.get("/api/v1/auth/resend-otp", {
-          params: {
-            email: dataRequest.email,
-          },
+        await axiosInstance.post("/api/v1/auth/resend-verification-otp", {
+          email: dataRequest.email,
         });
       }
       startCountdown();

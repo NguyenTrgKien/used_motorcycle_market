@@ -1,94 +1,49 @@
 import {
-  faArrowLeft,
-  faCircleInfo,
-  faImage,
-  faMagnifyingGlass,
-  faPaperPlane,
-  faPhone,
-  faShieldHalved,
-  faXmark,
-} from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { io, Socket } from "socket.io-client";
+  type ChangeEvent,
+  type ClipboardEvent,
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-import avatarDefault from "../../../assets/images/avatar_default.png";
+import { io, Socket } from "socket.io-client";
 import axiosInstance from "../../../configs/axiosInstance";
 import { useUser } from "../../../hooks/useUser";
+import ChatHeader from "./components/ChatHeader";
+import ConversationInfoPanel from "./components/ConversationInfoPanel";
+import ConversationSidebar from "./components/ConversationSidebar";
+import EmptyConversationState from "./components/EmptyConversationState";
+import ImagePreviewModal from "./components/ImagePreviewModal";
+import MessageComposer from "./components/MessageComposer";
+import MessageList from "./components/MessageList";
+import PostPreview from "./components/PostPreview";
+import { getMessagePreview } from "./messages.helpers";
+import type {
+  ChatMessage,
+  ChatRouteState,
+  ConversationItem,
+  ConversationUpdatedPayload,
+} from "./messages.types";
 
-interface ChatRouteState {
-  postId?: number;
+interface MessagesProps {
+  variant?: "customer" | "admin";
 }
 
-interface ConversationPost {
-  id: number;
-  slug: string;
-  title: string;
-  price: number;
-  imageUrl?: string;
-}
-
-interface ConversationParticipant {
-  id: number;
-  fullName?: string;
-  avatar?: string;
-  phone?: string;
-  isVerified?: boolean;
-}
-
-interface ConversationItem {
-  id: number;
-  buyerId: number;
-  sellerId: number;
-  postId: number;
-  participant?: ConversationParticipant;
-  post?: ConversationPost;
-  lastMessage: string;
-  lastMessageAt: string;
-  unreadCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface ChatMessage {
-  id: number;
-  senderId: number;
-  conversationId: number;
-  content: string;
-  messageType: string;
-  isRead: boolean;
-  createdAt: string;
-  sender?: {
-    id: number;
-    fullName?: string;
-    avatar?: string;
-  };
-}
-
-interface ConversationUpdatedPayload {
-  conversationId: number;
-  senderId: number;
-  lastMessage: string;
-  lastMessageAt: string;
-  updatedAt: string;
-}
-
-function formatTime(value?: string) {
-  if (!value) return "";
-
-  return new Date(value).toLocaleTimeString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function Messages() {
+function Messages({ variant = "customer" }: MessagesProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const chatState = location.state as ChatRouteState | null;
+  const isAdminVariant = variant === "admin";
   const { user } = useUser();
   const messageInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const iconPickerRef = useRef<HTMLDivElement>(null);
+  const iconButtonRef = useRef<HTMLButtonElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const selectedIdRef = useRef<number | null>(null);
@@ -98,10 +53,29 @@ function Messages() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [content, setContent] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFilePreview, setSelectedFilePreview] = useState("");
+  const [selectedPreviewImage, setSelectedPreviewImage] = useState("");
+  const [showIconPicker, setShowIconPicker] = useState(false);
+  const [showConversationInfo, setShowConversationInfo] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [hiddenPostPreviewIds, setHiddenPostPreviewIds] = useState<number[]>(
+    [],
+  );
+
+  const scrollToLatestMessage = useCallback(
+    (behavior: ScrollBehavior = "smooth") => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          messagesEndRef.current?.scrollIntoView({
+            behavior,
+            block: "end",
+          });
+        });
+      });
+    },
     [],
   );
 
@@ -113,6 +87,7 @@ function Messages() {
     : "";
   const showPostPreview = Boolean(
     selectedConversation &&
+    selectedConversation.post &&
     !hiddenPostPreviewIds.includes(selectedConversation.id),
   );
 
@@ -132,6 +107,16 @@ function Messages() {
           .includes(search.toLowerCase()),
       ),
     [visibleConversations, search],
+  );
+
+  const sharedImages = useMemo(
+    () => messages.filter((message) => message.messageType === "image"),
+    [messages],
+  );
+
+  const sharedFiles = useMemo(
+    () => messages.filter((message) => message.messageType === "file"),
+    [messages],
   );
 
   const upsertConversation = (conversation: ConversationItem) => {
@@ -187,15 +172,26 @@ function Messages() {
       const items = res.data.data || [];
       setConversations(items);
 
-      const matchedConversation = chatState?.postId
-        ? items.find((conversation) => conversation.postId === chatState.postId)
-        : undefined;
+      const matchedConversation = chatState?.conversationId
+        ? items.find(
+            (conversation) => conversation.id === chatState.conversationId,
+          )
+        : chatState?.postId
+          ? items.find(
+              (conversation) => conversation.postId === chatState.postId,
+            )
+          : undefined;
 
       if (matchedConversation) {
         setSelectedId(matchedConversation.id);
-      } else if (!chatState?.postId && !selectedId) {
+      } else if (
+        !chatState?.postId &&
+        !chatState?.conversationId &&
+        !selectedId
+      ) {
         setSelectedId(items[0]?.id || null);
       }
+
       return Boolean(matchedConversation);
     } catch (error: any) {
       toast.error(
@@ -260,6 +256,8 @@ function Messages() {
     } else {
       setMessages([]);
     }
+
+    setShowConversationInfo(false);
   }, [selectedId]);
 
   useEffect(() => {
@@ -267,11 +265,63 @@ function Messages() {
   }, [selectedId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "end",
-    });
-  }, [messages]);
+    if (!showIconPicker) return;
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node;
+
+      if (
+        iconPickerRef.current?.contains(target) ||
+        iconButtonRef.current?.contains(target)
+      ) {
+        return;
+      }
+
+      setShowIconPicker(false);
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [showIconPicker]);
+
+  useEffect(() => {
+    return () => {
+      if (selectedFilePreview) {
+        URL.revokeObjectURL(selectedFilePreview);
+      }
+    };
+  }, [selectedFilePreview]);
+
+  useEffect(() => {
+    if (!selectedPreviewImage) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedPreviewImage("");
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedPreviewImage]);
+
+  useEffect(() => {
+    scrollToLatestMessage("smooth");
+  }, [messages.length, scrollToLatestMessage]);
+
+  useEffect(() => {
+    if (!selectedId || isLoadingMessages) return;
+
+    scrollToLatestMessage("auto");
+  }, [isLoadingMessages, selectedId, scrollToLatestMessage]);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -344,43 +394,168 @@ function Messages() {
     };
   }, [selectedId]);
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const appendMessage = (message: ChatMessage) => {
+    setMessages((currentMessages) => {
+      const exists = currentMessages.some((item) => item.id === message.id);
+
+      if (exists) return currentMessages;
+
+      return [...currentMessages, message];
+    });
+  };
+
+  const updateConversationWithMessage = (
+    conversationId: number,
+    message: ChatMessage,
+  ) => {
+    setConversations((currentConversations) =>
+      currentConversations.map((conversation) =>
+        conversation.id === conversationId
+          ? {
+              ...conversation,
+              lastMessage: getMessagePreview(message),
+              lastMessageAt: message.createdAt,
+              updatedAt: message.createdAt,
+            }
+          : conversation,
+      ),
+    );
+  };
+
+  const clearSelectedFile = () => {
+    if (selectedFilePreview) {
+      URL.revokeObjectURL(selectedFilePreview);
+    }
+
+    setSelectedFile(null);
+    setSelectedFilePreview("");
+
+    if (imageInputRef.current) imageInputRef.current.value = "";
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const setFileForSending = (file: File) => {
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error("Tệp không được vượt quá 20MB");
+      return false;
+    }
+
+    if (selectedFilePreview) {
+      URL.revokeObjectURL(selectedFilePreview);
+    }
+
+    setSelectedFile(file);
+    setSelectedFilePreview(
+      file.type.startsWith("image/") ? URL.createObjectURL(file) : "",
+    );
+
+    return true;
+  };
+
+  const sendMessage = async (payload: FormData | Record<string, string>) => {
+    if (!selectedConversation) return;
+
+    const isFormData = payload instanceof FormData;
+    const res = await axiosInstance.post<{ data: ChatMessage }>(
+      `/api/v1/conversations/${selectedConversation.id}/messages`,
+      payload,
+      isFormData
+        ? {
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+          }
+        : undefined,
+    );
+
+    appendMessage(res.data.data);
+    updateConversationWithMessage(selectedConversation.id, res.data.data);
+  };
+
+  const handlePickFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    const isValidFile = setFileForSending(file);
+
+    if (!isValidFile) {
+      event.target.value = "";
+    }
+  };
+
+  const handlePasteMessage = (event: ClipboardEvent<HTMLInputElement>) => {
+    const imageItem = Array.from(event.clipboardData.items).find((item) =>
+      item.type.startsWith("image/"),
+    );
+
+    if (!imageItem) return;
+
+    const imageFile = imageItem.getAsFile();
+
+    if (!imageFile) return;
+
+    const extension = imageFile.type.split("/")[1] || "png";
+    const pastedFile = new File(
+      [imageFile],
+      `clipboard-image-${Date.now()}.${extension}`,
+      {
+        type: imageFile.type,
+        lastModified: Date.now(),
+      },
+    );
+
+    const isValidFile = setFileForSending(pastedFile);
+
+    if (isValidFile) {
+      event.preventDefault();
+    }
+  };
+
+  const handleSendIcon = async (icon: string) => {
+    if (!selectedConversation || isSending) return;
+
+    try {
+      setIsSending(true);
+      setShowIconPicker(false);
+      await sendMessage({ content: icon, messageType: "icon" });
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Không thể gửi icon");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!selectedConversation) return;
-    if (!content.trim()) {
-      toast.error("Vui lòng nhập nội dung tin nhắn");
+    const messageContent = content.trim();
+
+    if (!messageContent && !selectedFile) {
+      toast.error("Vui lòng nhập nội dung tin nhắn hoặc chọn tệp");
       return;
     }
 
     try {
       setIsSending(true);
-      const res = await axiosInstance.post<{ data: ChatMessage }>(
-        `/api/v1/conversations/${selectedConversation.id}/messages`,
-        { content },
-      );
-      setMessages((currentMessages) => {
-        const exists = currentMessages.some(
-          (message) => message.id === res.data.data.id,
-        );
 
-        if (exists) return currentMessages;
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append("file", selectedFile);
 
-        return [...currentMessages, res.data.data];
-      });
+        if (messageContent) {
+          formData.append("content", messageContent);
+        }
+
+        await sendMessage(formData);
+        clearSelectedFile();
+      } else {
+        await sendMessage({ content: messageContent, messageType: "text" });
+      }
+
       setContent("");
-      setConversations((currentConversations) =>
-        currentConversations.map((conversation) =>
-          conversation.id === selectedConversation.id
-            ? {
-                ...conversation,
-                lastMessage: res.data.data.content,
-                lastMessageAt: res.data.data.createdAt,
-                updatedAt: res.data.data.createdAt,
-              }
-            : conversation,
-        ),
-      );
+      setShowIconPicker(false);
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Không thể gửi tin nhắn");
     } finally {
@@ -397,324 +572,106 @@ function Messages() {
     window.location.href = `tel:${selectedConversation.participant.phone}`;
   };
 
-  const handleViewParticipantInfo = () => {
-    if (!selectedConversation?.participant?.id) return;
-
-    navigate(`/users/${selectedConversation.participant.id}`);
-  };
-
   return (
-    <div className="h-screen overflow-hidden px-[10rem] pt-[9rem]">
-      <div className="h-[calc(100vh-9rem)] overflow-hidden rounded-xl border border-gray-200 bg-white">
+    <div
+      className={
+        isAdminVariant
+          ? "h-[calc(100vh-10rem)] overflow-hidden p-6"
+          : "h-[calc(100vh-6.5rem)] overflow-hidden px-[20rem] pt-[2rem]"
+      }
+    >
+      <div
+        className={
+          isAdminVariant
+            ? "h-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
+            : "h-[calc(100vh-9rem)] overflow-hidden rounded-xl border border-gray-200 bg-white"
+        }
+      >
         <div className="grid h-full min-h-0 grid-cols-[34rem_1fr]">
-          <aside className="flex min-h-0 flex-col border-r border-gray-200 bg-white">
-            <div className="shrink-0 border-b border-gray-200 bg-white p-6">
-              <h1 className="font-semibold text-gray-900">Tin nhắn</h1>
-              <p className="mt-1 text-gray-500">
-                Trao đổi giữa người mua và người bán
-              </p>
-              <div className="relative mt-4 h-[4rem]">
-                <FontAwesomeIcon
-                  icon={faMagnifyingGlass}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-                />
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  className="h-full w-full rounded-xl border border-gray-300 bg-white pl-12 pr-4 outline-none transition-colors focus:border-amber-400"
-                  placeholder="Tìm theo tên tin đăng..."
-                />
-              </div>
-            </div>
+          <ConversationSidebar
+            conversations={filteredConversations}
+            selectedId={selectedId}
+            search={search}
+            isLoading={isLoadingConversations}
+            onSearchChange={setSearch}
+            onSelectConversation={setSelectedId}
+          />
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-6">
-              {isLoadingConversations ? (
-                <div className="mt-20 text-center text-gray-500">
-                  Đang tải hội thoại...
-                </div>
-              ) : filteredConversations.length > 0 ? (
-                filteredConversations.map((conversation) => (
-                  <button
-                    key={conversation.id}
-                    type="button"
-                    onClick={() => setSelectedId(conversation.id)}
-                    className={`mb-2 flex w-full items-start gap-3 rounded-xl p-4 text-left transition-colors ${
-                      selectedId === conversation.id
-                        ? "bg-cyan-100"
-                        : "hover:bg-gray-100"
-                    }`}
-                  >
-                    <div className="relative h-12 w-12 shrink-0">
-                      <img
-                        src={conversation.participant?.avatar || avatarDefault}
-                        alt={conversation.participant?.fullName || "Người dùng"}
-                        className="h-full w-full rounded-full border border-gray-200 object-cover"
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="truncate font-medium text-gray-900">
-                          {conversation.participant?.fullName || "Người dùng"}
-                        </p>
-                        <span className="shrink-0 text-[1.4rem] text-gray-400">
-                          {formatTime(conversation.lastMessageAt)}
-                        </span>
-                      </div>
-                      <p className="mt-1 truncate text-[1.4rem] text-gray-500">
-                        {conversation.post?.title || "Tin đăng"}
-                      </p>
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        <p className="truncate text-gray-500">
-                          {conversation.lastMessage || "Chưa có tin nhắn"}
-                        </p>
-                        {conversation.unreadCount > 0 && (
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500 px-2 text-[1.2rem] text-white">
-                            {conversation.unreadCount}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                ))
-              ) : (
-                <div className="mt-20 flex h-full items-start justify-center text-center text-gray-500">
-                  {visibleConversations.length === 0
-                    ? "Chưa có cuộc hội thoại nào"
-                    : "Không tìm thấy cuộc hội thoại"}
-                </div>
-              )}
-            </div>
-          </aside>
-
-          <section className="flex min-h-0 min-w-0 flex-col ">
+          <section className="flex min-h-0 min-w-0 flex-col">
             {selectedConversation ? (
-              <>
-                <div className="flex h-[7.2rem] items-center justify-between border-b border-gray-200 px-6">
-                  <div className="flex min-w-0 items-center gap-4">
-                    <button
-                      type="button"
-                      className="hidden h-10 w-10 items-center justify-center rounded-xl border border-gray-300 text-gray-500"
-                    >
-                      <FontAwesomeIcon icon={faArrowLeft} />
-                    </button>
-                    <img
-                      src={
-                        selectedConversation.participant?.avatar ||
-                        avatarDefault
-                      }
-                      alt={
-                        selectedConversation.participant?.fullName ||
-                        "Người dùng"
-                      }
-                      className="h-12 w-12 rounded-full border border-gray-200 object-cover"
-                    />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate font-medium text-gray-900">
-                          {selectedConversation.participant?.fullName ||
-                            "Người dùng"}
-                        </p>
-                        {selectedConversation.participant?.isVerified && (
-                          <FontAwesomeIcon
-                            icon={faShieldHalved}
-                            className="text-green-500"
-                          />
-                        )}
-                      </div>
-                      <p className="truncate text-gray-500">
-                        {selectedConversation.post?.title || "Tin đăng"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleCallParticipant}
-                      title="Gọi"
-                      aria-label="Gọi"
-                      className="flex h-14 w-14 items-center justify-center rounded-xl border border-gray-300 text-gray-500 transition-colors hover:bg-gray-50"
-                    >
-                      <FontAwesomeIcon icon={faPhone} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleViewParticipantInfo}
-                      title="Xem thông tin"
-                      aria-label="Xem thông tin"
-                      className="flex h-14 w-14 items-center justify-center rounded-xl border border-gray-300 text-gray-500 transition-colors hover:bg-gray-50"
-                    >
-                      <FontAwesomeIcon icon={faCircleInfo} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto bg-gray-100 p-6">
-                  {isLoadingMessages ? (
-                    <div className="flex h-full flex-col items-center justify-center gap-5">
-                      <div className="h-[4rem] w-[4rem] animate-spin rounded-full border-b-1 border-t-2 border-amber-600"></div>
-                      <span className="text-[1.4rem] text-gray-500">
-                        Đang tải tin nhắn...
-                      </span>
-                    </div>
-                  ) : messages.length > 0 ? (
-                    <div className="flex flex-col gap-4">
-                      {messages.map((message) => {
-                        const isMine = message.senderId === user?.id;
-                        return (
-                          <div
-                            key={message.id}
-                            className={`flex ${
-                              isMine ? "justify-end" : "justify-start"
-                            }`}
-                          >
-                            <div
-                              className={`max-w-[62%] rounded-3xl px-5 py-3 ${
-                                isMine
-                                  ? "rounded-br-sm bg-amber-500 text-white"
-                                  : "rounded-bl-sm border border-gray-200 bg-white text-gray-700"
-                              }`}
-                            >
-                              <p className="leading-relaxed">
-                                {message.content}
-                              </p>
-                              <p
-                                className={`mt-1 text-right text-[1.4rem] ${
-                                  isMine ? "text-gray-100" : "text-gray-500"
-                                }`}
-                              >
-                                {formatTime(message.createdAt)}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      <div ref={messagesEndRef} />
-                    </div>
-                  ) : (
-                    <div className="mt-20 text-center text-gray-500">
-                      Chưa có tin nhắn nào
-                    </div>
-                  )}
-                </div>
-
-                <div className="border-t border-gray-200 bg-white p-5">
-                  <div
-                    className={`relative mb-4 items-center gap-4 rounded-xl border border-gray-200 bg-gray-50 p-3 pr-14 ${
-                      showPostPreview ? "flex" : "hidden"
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setHiddenPostPreviewIds((currentIds) =>
-                          selectedConversation
-                            ? [...currentIds, selectedConversation.id]
-                            : currentIds,
-                        )
-                      }
-                      className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-red-500"
-                      title="Xóa bài đăng khỏi tin nhắn"
-                    >
-                      <FontAwesomeIcon icon={faXmark} />
-                    </button>
-                    <div className="h-20 w-24 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white">
-                      {selectedConversation.post?.imageUrl ? (
-                        <img
-                          src={selectedConversation.post.imageUrl}
-                          alt={selectedConversation.post.title}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-gray-300">
-                          <FontAwesomeIcon icon={faImage} />
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      {selectedConversation.post?.slug ? (
-                        <Link
-                          to={`/posts/${selectedConversation.post.slug}`}
-                          className="line-clamp-1 font-medium text-gray-900 transition-colors hover:text-amber-600"
-                        >
-                          {selectedConversation.post.title}
-                        </Link>
-                      ) : (
-                        <p className="line-clamp-1 font-medium text-gray-900">
-                          {selectedConversation.post?.title || "Tin đăng"}
-                        </p>
-                      )}
-                      {selectedPostPrice && (
-                        <p className="mt-1 font-semibold text-amber-600">
-                          {selectedPostPrice} đ
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <form
+              <div className="flex min-h-0 flex-1">
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <ChatHeader
+                    conversation={selectedConversation}
+                    showConversationInfo={showConversationInfo}
+                    onCallParticipant={handleCallParticipant}
+                    onToggleConversationInfo={() =>
+                      setShowConversationInfo((currentValue) => !currentValue)
+                    }
+                  />
+                  <PostPreview
+                    conversation={selectedConversation}
+                    price={selectedPostPrice}
+                    isVisible={showPostPreview}
+                    onHide={() =>
+                      setHiddenPostPreviewIds((currentIds) => [
+                        ...currentIds,
+                        selectedConversation.id,
+                      ])
+                    }
+                  />
+                  <MessageList
+                    messages={messages}
+                    currentUserId={user?.id}
+                    isLoading={isLoadingMessages}
+                    messagesEndRef={messagesEndRef}
+                    onPreviewImage={setSelectedPreviewImage}
+                    onImageLoad={() => scrollToLatestMessage("auto")}
+                  />
+                  <MessageComposer
+                    conversation={selectedConversation}
+                    content={content}
+                    selectedFile={selectedFile}
+                    selectedFilePreview={selectedFilePreview}
+                    showIconPicker={showIconPicker}
+                    isSending={isSending}
+                    messageInputRef={messageInputRef}
+                    imageInputRef={imageInputRef}
+                    fileInputRef={fileInputRef}
+                    iconPickerRef={iconPickerRef}
+                    iconButtonRef={iconButtonRef}
+                    onContentChange={setContent}
+                    onPickFile={handlePickFile}
+                    onPasteMessage={handlePasteMessage}
+                    onClearSelectedFile={clearSelectedFile}
                     onSubmit={handleSubmit}
-                    className="flex items-center gap-3"
-                  >
-                    <button
-                      type="button"
-                      className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl border border-gray-300 text-gray-500 transition-colors hover:bg-gray-50"
-                    >
-                      <FontAwesomeIcon
-                        icon={faImage}
-                        className="text-[2.4rem]"
-                      />
-                    </button>
-                    <input
-                      ref={messageInputRef}
-                      value={content}
-                      onChange={(event) => setContent(event.target.value)}
-                      className="h-20 flex-1 rounded-xl border border-gray-300 px-5 outline-none transition-colors focus:border-amber-400"
-                      placeholder={`Nhắn tin với ${
-                        selectedConversation.participant?.fullName ||
-                        "người dùng"
-                      }`}
-                    />
-                    <button
-                      type="submit"
-                      disabled={isSending}
-                      className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-gray-300"
-                    >
-                      <FontAwesomeIcon icon={faPaperPlane} />
-                    </button>
-                  </form>
+                    onToggleIconPicker={() =>
+                      setShowIconPicker((value) => !value)
+                    }
+                    onSendIcon={(icon) => void handleSendIcon(icon)}
+                  />
                 </div>
-              </>
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center">
-                <img
-                  src="https://www.shutterstock.com/image-vector/young-man-woman-having-friendly-600nw-2723715093.jpg"
-                  alt=""
-                  className="w-[50rem]"
+
+                <ConversationInfoPanel
+                  isOpen={showConversationInfo}
+                  sharedImages={sharedImages}
+                  sharedFiles={sharedFiles}
+                  onClose={() => setShowConversationInfo(false)}
+                  onPreviewImage={setSelectedPreviewImage}
                 />
-                <div className="text-center text-gray-500">
-                  <div>
-                    <p className="text-[1.8rem] font-medium text-gray-900">
-                      Bạn chưa có cuộc trò chuyện nào!
-                    </p>
-                    <p className="mt-2">
-                      Trải nghiệm chat để làm rõ thông tin về mặt hàng trước khi
-                      bắt đầu thực hiện mua bán
-                    </p>
-                    <button
-                      className="mt-6 rounded-md bg-amber-400 px-5 py-2 text-white transition-colors hover:bg-amber-500"
-                      onClick={() => {
-                        navigate("/");
-                      }}
-                    >
-                      Về trang chủ
-                    </button>
-                  </div>
-                </div>
               </div>
+            ) : (
+              <EmptyConversationState
+                onGoHome={() => navigate(isAdminVariant ? "/admin" : "/")}
+              />
             )}
           </section>
         </div>
       </div>
+      <ImagePreviewModal
+        imageUrl={selectedPreviewImage}
+        onClose={() => setSelectedPreviewImage("")}
+      />
     </div>
   );
 }

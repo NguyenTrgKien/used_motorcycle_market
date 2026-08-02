@@ -1,11 +1,13 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
+  OnModuleDestroy,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository } from 'typeorm';
+import { Brackets, LessThan, Repository } from 'typeorm';
 import { Conversation } from './entities/conversation.entity';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { Message } from '../message/entities/message.entity';
@@ -13,9 +15,16 @@ import { Post } from '../post/entities/post.entity';
 import { CreateMessageDto } from '../message/dto/create-message.dto';
 import { MessageType } from 'src/shared';
 import { ConversationGateway } from './conversation.gateway';
+import Redis from 'ioredis';
+import { CONVERSATION_REDIS } from './conversation.constants';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationType } from 'src/shared';
 
 @Injectable()
-export class ConversationService {
+export class ConversationService implements OnModuleDestroy {
+  private readonly conversationListCacheTtl = 30;
+
   constructor(
     @InjectRepository(Conversation)
     private readonly conversationRepo: Repository<Conversation>,
@@ -24,9 +33,20 @@ export class ConversationService {
     @InjectRepository(Post)
     private readonly postRepo: Repository<Post>,
     private readonly conversationGateway: ConversationGateway,
+    @Inject(CONVERSATION_REDIS)
+    private readonly redis: Redis,
+    private readonly cloudinaryService: CloudinaryService,
+    private readonly notificationService: NotificationService,
   ) {}
 
-  private async findConversationForUser(userId: number, conversationId: number) {
+  onModuleDestroy() {
+    this.redis.disconnect();
+  }
+
+  private async findConversationForUser(
+    userId: number,
+    conversationId: number,
+  ) {
     const conversation = await this.conversationRepo.findOne({
       where: { id: conversationId },
       relations: {
@@ -65,7 +85,9 @@ export class ConversationService {
 
   private formatParticipant(conversation: Conversation, userId: number) {
     const participant =
-      conversation.buyerId === userId ? conversation.seller : conversation.buyer;
+      conversation.buyerId === userId
+        ? conversation.seller
+        : conversation.buyer;
 
     return {
       id: participant?.id,
@@ -76,30 +98,12 @@ export class ConversationService {
     };
   }
 
-  private async formatConversation(conversation: Conversation, userId: number) {
-    const lastMessage = await this.messageRepo.findOne({
-      where: { conversationId: conversation.id },
-      order: { createdAt: 'DESC' },
-    });
-
-    const unreadCount = await this.messageRepo.count({
-      where: {
-        conversationId: conversation.id,
-        isRead: false,
-      },
-    });
-
-    const unreadForUser = lastMessage
-      ? await this.messageRepo
-          .createQueryBuilder('message')
-          .where('message.conversationId = :conversationId', {
-            conversationId: conversation.id,
-          })
-          .andWhere('message.senderId != :userId', { userId })
-          .andWhere('message.isRead = false')
-          .getCount()
-      : 0;
-
+  private formatConversation(
+    conversation: Conversation,
+    userId: number,
+    unreadCount = 0,
+    totalUnreadCount = 0,
+  ) {
     return {
       id: conversation.id,
       buyerId: conversation.buyerId,
@@ -107,13 +111,100 @@ export class ConversationService {
       postId: conversation.postId,
       participant: this.formatParticipant(conversation, userId),
       post: this.formatPost(conversation.post),
-      lastMessage: lastMessage?.content || '',
-      lastMessageAt: lastMessage?.createdAt || conversation.updatedAt,
-      unreadCount: unreadForUser,
-      totalUnreadCount: unreadCount,
+      lastMessage: conversation.lastMessage || '',
+      lastMessageAt: conversation.lastMessageAt || conversation.updatedAt,
+      unreadCount,
+      totalUnreadCount,
       createdAt: conversation.createdAt,
       updatedAt: conversation.updatedAt,
     };
+  }
+
+  private getConversationListCacheKey(userId: number) {
+    return `conversation:list:user:${userId}`;
+  }
+
+  private async getCachedConversationList(userId: number) {
+    try {
+      const cached = await this.redis.get(
+        this.getConversationListCacheKey(userId),
+      );
+
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async setCachedConversationList(userId: number, value: unknown) {
+    try {
+      await this.redis.set(
+        this.getConversationListCacheKey(userId),
+        JSON.stringify(value),
+        'EX',
+        this.conversationListCacheTtl,
+      );
+    } catch (error) {
+      console.log(error);
+    }
+  }
+
+  private async invalidateConversationListCache(...userIds: number[]) {
+    const keys = [...new Set(userIds)].map((userId) =>
+      this.getConversationListCacheKey(userId),
+    );
+
+    if (!keys.length) return;
+
+    try {
+      await this.redis.del(...keys);
+    } catch (error) {
+      console.log(error);
+    }
+  }
+
+  private async getUnreadCounts(conversationIds: number[], userId: number) {
+    if (!conversationIds.length)
+      return new Map<number, Record<string, number>>();
+
+    const rows = await this.messageRepo
+      .createQueryBuilder('message')
+      .select('message.conversationId', 'conversationId')
+      .addSelect(
+        'COUNT(*) FILTER (WHERE message.senderId != :userId AND message.isRead = false)',
+        'unreadCount',
+      )
+      .addSelect(
+        'COUNT(*) FILTER (WHERE message.isRead = false)',
+        'totalUnreadCount',
+      )
+      .where('message.conversationId IN (:...conversationIds)', {
+        conversationIds,
+      })
+      .groupBy('message.conversationId')
+      .setParameter('userId', userId)
+      .getRawMany<{
+        conversationId: string;
+        unreadCount: string;
+        totalUnreadCount: string;
+      }>();
+
+    return new Map(
+      rows.map((row) => [
+        Number(row.conversationId),
+        {
+          unreadCount: Number(row.unreadCount),
+          totalUnreadCount: Number(row.totalUnreadCount),
+        },
+      ]),
+    );
+  }
+
+  private getLastMessageText(messageType: MessageType, content: string) {
+    if (messageType === MessageType.IMAGE) return '[Hình ảnh]';
+    if (messageType === MessageType.FILE) return '[Tệp đính kèm]';
+
+    return content;
   }
 
   async start(userId: number, createConversationDto: CreateConversationDto) {
@@ -148,23 +239,37 @@ export class ConversationService {
           postId: post.id,
         }),
       );
-      conversation = await this.findConversationForUser(userId, conversation.id);
+      conversation = await this.findConversationForUser(
+        userId,
+        conversation.id,
+      );
     }
+
+    const unreadCounts = await this.getUnreadCounts([conversation.id], userId);
+    const counts = unreadCounts.get(conversation.id);
 
     return {
       message: 'Mở hội thoại thành công',
-      data: await this.formatConversation(conversation, userId),
+      data: this.formatConversation(
+        conversation,
+        userId,
+        counts?.unreadCount || 0,
+        counts?.totalUnreadCount || 0,
+      ),
     };
   }
 
   async findAll(userId: number) {
+    const cached = await this.getCachedConversationList(userId);
+
+    if (cached) return cached;
+
     const conversations = await this.conversationRepo
       .createQueryBuilder('conversation')
       .leftJoinAndSelect('conversation.buyer', 'buyer')
       .leftJoinAndSelect('conversation.seller', 'seller')
       .leftJoinAndSelect('conversation.post', 'post')
       .leftJoinAndSelect('post.post_images', 'post_images')
-      .innerJoin('conversation.messages', 'message')
       .where(
         new Brackets((qb) => {
           qb.where('conversation.buyerId = :userId', { userId }).orWhere(
@@ -173,37 +278,62 @@ export class ConversationService {
           );
         }),
       )
-      .distinct(true)
+      .andWhere('conversation.lastMessage IS NOT NULL')
       .orderBy('conversation.updatedAt', 'DESC')
       .getMany();
 
-    return {
+    const unreadCounts = await this.getUnreadCounts(
+      conversations.map((conversation) => conversation.id),
+      userId,
+    );
+    const response = {
       message: 'Lấy danh sách hội thoại thành công',
-      data: await Promise.all(
-        conversations.map((conversation) =>
-          this.formatConversation(conversation, userId),
-        ),
-      ),
+      data: conversations.map((conversation) => {
+        const counts = unreadCounts.get(conversation.id);
+
+        return this.formatConversation(
+          conversation,
+          userId,
+          counts?.unreadCount || 0,
+          counts?.totalUnreadCount || 0,
+        );
+      }),
     };
+
+    await this.setCachedConversationList(userId, response);
+
+    return response;
   }
 
-  async findMessages(userId: number, conversationId: number) {
+  async findMessages(
+    userId: number,
+    conversationId: number,
+    limit = 50,
+    beforeId?: number,
+  ) {
     await this.findConversationForUser(userId, conversationId);
+    const take = Math.min(Math.max(Number(limit) || 50, 1), 100);
 
     const messages = await this.messageRepo.find({
-      where: { conversationId },
+      where: {
+        conversationId,
+        ...(beforeId ? { id: LessThan(beforeId) } : {}),
+      },
       relations: { user: true },
-      order: { createdAt: 'ASC' },
+      order: { id: 'DESC' },
+      take,
     });
+    const orderedMessages = messages.reverse();
 
     return {
       message: 'Lấy tin nhắn thành công',
-      data: messages.map((message) => ({
+      data: orderedMessages.map((message) => ({
         id: message.id,
         senderId: message.senderId,
         conversationId: message.conversationId,
         content: message.content,
         messageType: message.messageType,
+        publicId: message.publicId,
         isRead: message.isRead,
         createdAt: message.createdAt,
         sender: {
@@ -219,14 +349,38 @@ export class ConversationService {
     userId: number,
     conversationId: number,
     createMessageDto: CreateMessageDto,
+    file?: Express.Multer.File,
   ) {
     const conversation = await this.findConversationForUser(
       userId,
       conversationId,
     );
-    const content = createMessageDto.content.trim();
+    const rawContent = createMessageDto.content?.trim() || '';
+    let content = rawContent;
+    let messageType = createMessageDto.messageType || MessageType.TEXT;
+    let publicId: string | undefined;
 
-    if (!content) {
+    if (file) {
+      const uploadedFile = await this.cloudinaryService.uploadSingleFile(file);
+      publicId = uploadedFile.publicId;
+      messageType = file.mimetype.startsWith('image/')
+        ? MessageType.IMAGE
+        : MessageType.FILE;
+      content =
+        messageType === MessageType.IMAGE
+          ? uploadedFile.url
+          : JSON.stringify({
+              url: uploadedFile.url,
+              name: file.originalname,
+              size: file.size,
+              mimeType: file.mimetype,
+            });
+    } else if (
+      messageType === MessageType.IMAGE ||
+      messageType === MessageType.FILE
+    ) {
+      throw new BadRequestException('Vui lòng chọn tệp cần gửi');
+    } else if (!content) {
       throw new BadRequestException('Vui lòng nhập nội dung tin nhắn');
     }
 
@@ -235,12 +389,34 @@ export class ConversationService {
         conversationId,
         senderId: userId,
         content,
-        messageType: MessageType.TEXT,
+        messageType,
+        publicId,
       }),
     );
 
-    conversation.updatedAt = new Date();
+    conversation.lastMessage = this.getLastMessageText(
+      message.messageType,
+      message.content,
+    );
+    conversation.lastMessageAt = message.createdAt;
+    conversation.lastSenderId = message.senderId;
+    conversation.updatedAt = message.createdAt;
     await this.conversationRepo.save(conversation);
+    await this.invalidateConversationListCache(
+      conversation.buyerId,
+      conversation.sellerId,
+    );
+    const receiverId =
+      conversation.buyerId === userId
+        ? conversation.sellerId
+        : conversation.buyerId;
+    await this.notificationService.createNotification({
+      userId: receiverId,
+      title: 'Bạn có tin nhắn mới',
+      content: this.getLastMessageText(message.messageType, message.content),
+      type: NotificationType.NEW_MESSAGE,
+      referenceId: conversation.id,
+    });
 
     const messagePayload = {
       id: message.id,
@@ -248,12 +424,16 @@ export class ConversationService {
       conversationId: message.conversationId,
       content: message.content,
       messageType: message.messageType,
+      publicId: message.publicId,
       isRead: message.isRead,
       createdAt: message.createdAt,
     };
 
     this.conversationGateway.emitMessageCreated(messagePayload);
-    this.conversationGateway.emitConversationUpdated(conversation, messagePayload);
+    this.conversationGateway.emitConversationUpdated(
+      conversation,
+      messagePayload,
+    );
 
     return {
       message: 'Gửi tin nhắn thành công',
@@ -270,6 +450,7 @@ export class ConversationService {
       .where('conversationId = :conversationId', { conversationId })
       .andWhere('senderId != :userId', { userId })
       .execute();
+    await this.invalidateConversationListCache(userId);
 
     return {
       message: 'Đã đánh dấu hội thoại là đã đọc',

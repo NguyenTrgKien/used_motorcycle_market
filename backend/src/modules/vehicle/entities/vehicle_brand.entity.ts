@@ -28,6 +28,9 @@ export class VehicleBrand {
   logo?: string;
 
   @Column({ nullable: true })
+  publicId?: string;
+
+  @Column({ nullable: true })
   country?: string;
 
   @Column({ default: true })

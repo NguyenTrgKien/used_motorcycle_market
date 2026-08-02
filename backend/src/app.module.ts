@@ -26,6 +26,9 @@ import { AddressController } from './modules/address/address.controller';
 import { AddressModule } from './modules/address/address.module';
 import { UserSessionModule } from './modules/user_session/user_session.module';
 import { GeminiRateLimiterModule } from './modules/gemini-rate-limiter/gemini-rate-limiter.module';
+import { ViewHistoryModule } from './modules/view_history/view_history.module';
+import { ProfessionalSellerModule } from './modules/professional_seller/professional_seller.module';
+import { ListingPaymentModule } from './modules/listing_payment/listing-payment.module';
 
 @Module({
   imports: [
@@ -53,6 +56,9 @@ import { GeminiRateLimiterModule } from './modules/gemini-rate-limiter/gemini-ra
     AddressModule,
     UserSessionModule,
     GeminiRateLimiterModule,
+    ViewHistoryModule,
+    ProfessionalSellerModule,
+    ListingPaymentModule,
   ],
   controllers: [AppController, AddressController],
   providers: [AppService],

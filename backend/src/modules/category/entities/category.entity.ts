@@ -13,6 +13,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import type { ListingFormSchema } from '../listing-form-schema';
 
 @Entity('category')
 export class Category {
@@ -36,13 +37,13 @@ export class Category {
   image?: string;
 
   @Column({ nullable: true })
-  icon?: string;
+  imagePublicId?: string;
 
   @Column({ unique: true })
   slug: string;
 
-  @Column({ nullable: true })
-  publicId: string;
+  @Column({ type: 'jsonb', nullable: true })
+  listingFormSchema?: ListingFormSchema;
 
   @CreateDateColumn()
   createdAt: Date;

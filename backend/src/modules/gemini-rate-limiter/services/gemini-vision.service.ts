@@ -1,11 +1,17 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GeminiRateLimiterService } from './gemini-rate-limiter.service';
+import {
+  LISTING_VEHICLE_FIELDS,
+  ListingVehicleField,
+} from '../../category/listing-form-schema';
 
 export interface CarAnalysisResult {
   isVehicle: boolean;
   rejectReason: string;
+  categorySlug: string;
   title: string;
+  description: string;
   brandName: string;
   modelName: string;
   bodyType: string;
@@ -31,6 +37,13 @@ export interface CarAnalysisResult {
   extraSpecs: Record<string, unknown>;
   confidence: number;
   notes: string[];
+}
+
+export interface VehicleDescriptionResult {
+  isVehicle: boolean;
+  rejectReason: string;
+  description: string;
+  confidence: number;
 }
 
 export interface PriceComparable {
@@ -90,18 +103,34 @@ Nếu thiếu dữ liệu quan trọng, vẫn ước lượng thận trọng và
 Không trả giá âm, không dùng đơn vị trong số, làm tròn đến 100000 VND.
 Schema: {"suggestedPrice":0,"minPrice":0,"maxPrice":0,"confidence":0,"reason":"","missingFields":[]}`;
 
-const ANALYSIS_PROMPT = `Phân tích ảnh xe để tạo tin đăng marketplace xe cũ tại Việt Nam.
+const ANALYSIS_PROMPT = `Phân tích xe hoặc phụ kiện, phụ tùng xe từ hình ảnh để tạo tin đăng marketplace tại Việt Nam.
 Chỉ trả về JSON hợp lệ, không markdown, không giải thích.
 Chỉ suy luận các thông tin có thể thấy rõ từ ảnh. Nếu không chắc, để chuỗi rỗng hoặc dùng other cho enum.
-Nếu ảnh không phải phương tiện, không liên quan đến xe, ảnh quá mờ, ảnh bị che khuất quá nhiều, ảnh lỗi, hoặc không đủ thông tin để xác định có xe thì trả isVehicle là false và rejectReason bằng tiếng Việt ngắn gọn.
-Nếu có ít nhất một phương tiện hợp lệ và đủ rõ để đăng tin thì trả isVehicle là true và rejectReason là chuỗi rỗng.
+Chấp nhận phương tiện và các phụ kiện, phụ tùng xe có thể nhận diện rõ như mũ bảo hiểm, camera hành trình, màn hình, lốp, mâm, đèn, gương, yên, thùng xe, ắc quy, bộ sạc, linh kiện động cơ và đồ chơi xe.
+Nếu ảnh không có phương tiện, phụ kiện hoặc phụ tùng liên quan đến xe, ảnh quá mờ, bị che khuất quá nhiều, ảnh lỗi hoặc không đủ thông tin để nhận diện thì trả isVehicle là false và rejectReason bằng tiếng Việt ngắn gọn.
+Nếu có ít nhất một phương tiện, phụ kiện hoặc phụ tùng xe hợp lệ và đủ rõ để đăng tin thì trả isVehicle là true và rejectReason là chuỗi rỗng.
 Các field số vẫn trả về dạng chuỗi số, không kèm đơn vị.
 Enum hợp lệ:
 - bodyType: motorbike,motorcycle,scooter,car,truck,dump_truck,van,bus,special_purpose,other
 - condition: new,used,excellent,good,fair
 - fuelType: gasoline,diesel,electric,hybrid,plug_in_hybrid,other
 - transmission: manual,automatic,semi_automatic,cvt,single_speed,other
-Schema: {"isVehicle":true,"rejectReason":"","title":"","brandName":"","modelName":"","bodyType":"","manufactureYear":"","registrationYear":"","mileage":"","color":"","condition":"","fuelType":"","transmission":"","engineCapacity":"","enginePower":"","batteryCapacity":"","rangePerCharge":"","licensePlate":"","origin":"","documentsStatus":"","seatCount":"","doorCount":"","wheelCount":"","payloadKg":"","grossWeightKg":"","extraSpecs":{},"confidence":0,"notes":[]}`;
+Không viết mô tả tin đăng. Chỉ nhận diện các thuộc tính trong schema.
+Tạo title ngắn gọn bằng tiếng Việt, phù hợp cho tin đăng. Với phương tiện, ưu tiên cấu trúc hãng xe + dòng xe + loại xe hoặc đặc điểm quan sát rõ được. Với phụ kiện hoặc phụ tùng, nêu đúng tên sản phẩm và đặc điểm có thể quan sát rõ. Không thêm năm sản xuất, phiên bản hoặc thông số nếu không thể xác nhận từ ảnh.
+Schema: {"isVehicle":true,"rejectReason":"","categorySlug":"","title":"","brandName":"","modelName":"","bodyType":"","manufactureYear":"","registrationYear":"","mileage":"","color":"","condition":"","fuelType":"","transmission":"","engineCapacity":"","enginePower":"","batteryCapacity":"","rangePerCharge":"","licensePlate":"","origin":"","documentsStatus":"","seatCount":"","doorCount":"","wheelCount":"","payloadKg":"","grossWeightKg":"","extraSpecs":{},"confidence":0,"notes":[]}`;
+
+const DESCRIPTION_PROMPT = `Phân tích ảnh để viết mô tả cho tin đăng xe, phụ kiện hoặc phụ tùng xe tại Việt Nam.
+Chỉ trả về JSON hợp lệ, không markdown, không giải thích ngoài JSON.
+Chấp nhận phương tiện và các phụ kiện, phụ tùng xe có thể nhận diện rõ như mũ bảo hiểm, camera hành trình, màn hình, lốp, mâm, đèn, gương, yên, thùng xe, ắc quy, bộ sạc, linh kiện động cơ và đồ chơi xe.
+Nếu ảnh không có phương tiện, phụ kiện hoặc phụ tùng liên quan đến xe, ảnh quá mờ, bị che khuất quá nhiều hoặc không đủ rõ để nhận diện thì trả isVehicle là false và rejectReason bằng tiếng Việt ngắn gọn.
+Nếu có ít nhất một phương tiện, phụ kiện hoặc phụ tùng xe hợp lệ thì trả isVehicle là true và rejectReason là chuỗi rỗng.
+Viết description bằng tiếng Việt tự nhiên, chuyên nghiệp, hấp dẫn và dễ đọc, khoảng 100-150 từ.
+Mở đầu bằng 1-2 câu giới thiệu thu hút nhưng không phóng đại.
+Tiếp theo tạo mục "Điểm nổi bật:" gồm 3-5 dòng gạch đầu dòng. Mỗi dòng bắt đầu bằng "- " và nêu một đặc điểm riêng có thể quan sát rõ. Với xe, có thể mô tả ngoại hình, màu sắc, kiểu dáng, không gian hoặc tình trạng bề ngoài. Với phụ kiện hoặc phụ tùng, mô tả loại sản phẩm, màu sắc, chất liệu, thiết kế và tình trạng bề ngoài có thể quan sát được.
+Kết thúc bằng một đoạn ngắn mời người mua liên hệ hoặc xem xe trực tiếp nhẹ nhàng, không tạo cảm giác thúc ép.
+Dùng ký tự xuống dòng để tách phần mở đầu, danh sách và phần kết thúc. Không dùng emoji, không viết toàn bộ bằng chữ in hoa và không lặp ý.
+Chỉ dùng thông tin quan sát được từ ảnh, không bịa giá bán, địa điểm, chủ sở hữu, lịch sử bảo dưỡng, giấy tờ, quãng đường, năm sản xuất, phiên bản hoặc tình trạng kỹ thuật không thể xác nhận.
+Schema: {"isVehicle":true,"rejectReason":"","description":"","confidence":0}`;
 
 @Injectable()
 export class GeminiVisionService {
@@ -118,7 +147,14 @@ export class GeminiVisionService {
       'gemini-2.5-flash';
   }
 
-  async analyzeImages(images: Express.Multer.File[]): Promise<{
+  async analyzeImages(
+    images: Express.Multer.File[],
+    categories: Array<{
+      slug: string;
+      name: string;
+      aiFields?: ListingVehicleField[];
+    }> = [],
+  ): Promise<{
     message: string;
     data: CarAnalysisResult;
     usage: ReturnType<GeminiRateLimiterService['getUsage']>;
@@ -146,12 +182,19 @@ export class GeminiVisionService {
       },
     }));
 
+    const categoryPrompt = categories.length
+      ? `\nChọn chính xác một categorySlug từ danh sách sau dựa trên đối tượng chính trong ảnh. Không tự tạo slug mới. Sau khi chọn danh mục, chỉ phân tích các thuộc tính nằm trong aiFields của danh mục đó; mọi thuộc tính khác phải trả chuỗi rỗng. Nếu không thể xác định danh mục thì trả categorySlug là chuỗi rỗng.\nDanh mục và thuộc tính hợp lệ: ${JSON.stringify(categories)}`
+      : '\nKhông có danh sách danh mục để đối chiếu, trả categorySlug là chuỗi rỗng.';
+
     const response = await client.models.generateContent({
       model: this.model,
       contents: [
         {
           role: 'user',
-          parts: [{ text: ANALYSIS_PROMPT }, ...imageParts],
+          parts: [
+            { text: `${ANALYSIS_PROMPT}${categoryPrompt}` },
+            ...imageParts,
+          ],
         },
       ],
       config: {
@@ -165,7 +208,7 @@ export class GeminiVisionService {
       const parsed = JSON.parse(text) as CarAnalysisResult;
       return {
         message: 'Gemini đã phân tích ảnh xe',
-        data: this.sanitize(parsed),
+        data: this.sanitize(parsed, categories),
         usage: this.rateLimiter.getUsage(),
       };
     } catch {
@@ -174,6 +217,74 @@ export class GeminiVisionService {
         data: this.getFallback(images),
         usage: this.rateLimiter.getUsage(),
       };
+    }
+  }
+
+  async generateDescription(images: Express.Multer.File[]): Promise<{
+    message: string;
+    data: VehicleDescriptionResult;
+    usage: ReturnType<GeminiRateLimiterService['getUsage']>;
+  }> {
+    if (!images.length) {
+      throw new BadRequestException('Vui lòng tải lên ít nhất một hình ảnh');
+    }
+
+    if (!this.apiKey) {
+      return {
+        message: 'Chưa thể tạo mô tả từ hình ảnh',
+        data: {
+          isVehicle: false,
+          rejectReason: 'Chưa cấu hình GEMINI_API_KEY',
+          description: '',
+          confidence: 0,
+        },
+        usage: this.rateLimiter.getUsage(),
+      };
+    }
+
+    this.rateLimiter.checkAndConsume();
+    const { GoogleGenAI } = await import('@google/genai');
+    const client = new GoogleGenAI({ apiKey: this.apiKey });
+    const imageParts = images.slice(0, 6).map((image) => ({
+      inlineData: {
+        mimeType: image.mimetype,
+        data: image.buffer.toString('base64'),
+      },
+    }));
+    const response = await client.models.generateContent({
+      model: this.model,
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: DESCRIPTION_PROMPT }, ...imageParts],
+        },
+      ],
+      config: {
+        responseMimeType: 'application/json',
+      },
+    });
+
+    try {
+      const parsed = JSON.parse(
+        response.text ?? '{}',
+      ) as Partial<VehicleDescriptionResult>;
+      return {
+        message: 'AI đã gợi ý mô tả tin đăng',
+        data: {
+          isVehicle: parsed.isVehicle === true,
+          rejectReason: parsed.rejectReason?.trim() ?? '',
+          description: parsed.description?.trim() ?? '',
+          confidence:
+            typeof parsed.confidence === 'number'
+              ? Math.min(1, Math.max(0, parsed.confidence))
+              : 0,
+        },
+        usage: this.rateLimiter.getUsage(),
+      };
+    } catch {
+      throw new BadRequestException(
+        'AI trả về dữ liệu mô tả không đúng định dạng',
+      );
     }
   }
 
@@ -226,7 +337,13 @@ export class GeminiVisionService {
     }
   }
 
-  private sanitize(data: Partial<CarAnalysisResult>): CarAnalysisResult {
+  private sanitize(
+    data: Partial<CarAnalysisResult>,
+    categories: Array<{
+      slug: string;
+      aiFields?: ListingVehicleField[];
+    }> = [],
+  ): CarAnalysisResult {
     const validBodyTypes = [
       'motorbike',
       'motorcycle',
@@ -256,11 +373,16 @@ export class GeminiVisionService {
       'single_speed',
       'other',
     ];
+    const validCategorySlugs = categories.map((category) => category.slug);
 
-    return {
+    const sanitized: CarAnalysisResult = {
       isVehicle: data.isVehicle === true,
       rejectReason: data.rejectReason ?? '',
+      categorySlug: validCategorySlugs.includes(data.categorySlug ?? '')
+        ? (data.categorySlug ?? '')
+        : '',
       title: data.title ?? '',
+      description: data.description?.trim() ?? '',
       brandName: data.brandName ?? '',
       modelName: data.modelName ?? '',
       bodyType: validBodyTypes.includes(data.bodyType ?? '')
@@ -303,6 +425,17 @@ export class GeminiVisionService {
         ? data.notes.filter((n) => typeof n === 'string')
         : [],
     };
+    const selectedCategory = categories.find(
+      (category) => category.slug === sanitized.categorySlug,
+    );
+    if (selectedCategory?.aiFields?.length) {
+      LISTING_VEHICLE_FIELDS.forEach((field) => {
+        if (!selectedCategory.aiFields?.includes(field)) {
+          sanitized[field] = '';
+        }
+      });
+    }
+    return sanitized;
   }
 
   private sanitizePriceSuggestion(
@@ -347,8 +480,10 @@ export class GeminiVisionService {
   private getFallback(images: Express.Multer.File[]): CarAnalysisResult {
     return {
       isVehicle: false,
+      categorySlug: '',
       rejectReason: 'Chưa phân tích được ảnh xe',
       title: '',
+      description: '',
       brandName: '',
       modelName: '',
       bodyType: 'other',

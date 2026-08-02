@@ -2,42 +2,47 @@ import {
   Controller,
   Post,
   Body,
-  UseInterceptors,
-  UploadedFile,
   Param,
   ParseIntPipe,
   Patch,
   Get,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { CategoryService } from './category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { Public } from 'src/common/decorators/public.decorator';
+import { Roles } from 'src/common/decorators/role.decorator';
+import { UserRole } from 'src/shared';
 
 @Controller('categories')
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
+  @Roles(UserRole.ADMIN)
   @Post('/create')
   @UseInterceptors(FileInterceptor('image'))
   create(
     @Body() createCategoryDto: CreateCategoryDto,
-    @UploadedFile() image: Express.Multer.File,
+    @UploadedFile() image?: Express.Multer.File,
   ) {
     return this.categoryService.create(createCategoryDto, image);
   }
 
+  @Roles(UserRole.ADMIN)
   @Post('/update/:id')
   @UseInterceptors(FileInterceptor('image'))
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateCategoryDto: UpdateCategoryDto,
-    @UploadedFile() image: Express.Multer.File,
+    @UploadedFile() image?: Express.Multer.File,
   ) {
     return this.categoryService.update(id, updateCategoryDto, image);
   }
 
+  @Roles(UserRole.ADMIN)
   @Patch('/:id/toggle-active')
   toggleActive(@Param('id', ParseIntPipe) id: number) {
     return this.categoryService.toggleActive(id);

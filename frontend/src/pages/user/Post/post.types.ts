@@ -2,6 +2,7 @@ export interface CategoryOption {
   id: number;
   name: string;
   slug: string;
+  listingFormSchema?: import("./helpers/listingFormSchema").ListingFormSchema;
 }
 
 export interface VehicleInfo {
@@ -48,6 +49,17 @@ export interface PostSellerInfo {
   phone?: string;
   reviewCount?: number;
   averageRating?: number;
+  sellerType?: "individual" | "professional";
+  store?: {
+    id: number;
+    storeName: string;
+    logoUrl?: string;
+  };
+  professionalSellerProfile?: {
+    id: number;
+    storeName: string;
+    logoUrl?: string;
+  };
 }
 
 export interface ListingPost {
@@ -63,8 +75,38 @@ export interface ListingPost {
   addressDetail?: string;
   viewCount: number;
   createdAt: string;
+  listingBillingType?: "free" | "paid";
+  listingPricingGroup?: "large_vehicle" | "other_vehicle";
+  listingFee?: number;
+  freeQuotaRefunded?: boolean;
+  rejectedReason?: string;
+  hiddenReason?: string;
+  hiddenAt?: string;
+  hiddenBy?: number;
   vehicle?: VehicleInfo;
   category?: CategoryOption;
   user?: PostSellerInfo;
   post_images?: PostImageInfo[];
+  isSaved?: boolean;
+  paymentOrder?: {
+    id: string;
+    code?: string;
+    amount?: number;
+    method: "vnpay" | "momo" | "bank_transfer";
+    status: "pending" | "paid" | "failed" | "cancelled" | "rejected";
+    transferSubmittedAt?: string;
+    receiptUrl?: string | null;
+    rejectedReason?: string;
+    rejectedAt?: string;
+    paidAt?: string;
+    createdAt?: string;
+    expiresAt?: string;
+    gatewayTransactionId?: string;
+    rejectionHistory?: Array<{
+      reason: string;
+      rejectedAt: string;
+      rejectedBy: number;
+      receiptUrl?: string;
+    }>;
+  } | null;
 }

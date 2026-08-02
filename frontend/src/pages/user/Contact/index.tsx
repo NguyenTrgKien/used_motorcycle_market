@@ -34,7 +34,7 @@ function Contact() {
   };
 
   return (
-    <div className="px-[10rem] pt-[9rem] pb-[4rem]">
+    <div className="px-[20rem] pt-[9rem] pb-[4rem]">
       <div className="grid grid-cols-[1fr_38rem] gap-8">
         <section className="rounded-xl border border-gray-200 bg-white p-8">
           <div className="border-b border-gray-200 pb-5">
