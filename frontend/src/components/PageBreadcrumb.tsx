@@ -27,11 +27,23 @@ function getBreadcrumbItems(pathname: string): BreadcrumbItem[] {
   if (pathname === "/notifications") {
     return [{ label: "Thông báo" }];
   }
+  if (pathname === "/my-reports") {
+    return [{ label: "Báo cáo của tôi" }];
+  }
   if (pathname === "/saved-listings") {
     return [{ label: "Tin đã lưu" }];
   }
+  if (pathname === "/transactions") {
+    return [{ label: "Lịch sử giao dịch" }];
+  }
   if (pathname === "/posts/manage") {
     return [{ label: "Quản lý tin" }];
+  }
+  if (pathname === "/seller/plans") {
+    return [
+      { label: "Quản lý bán hàng", to: "/posts/manage" },
+      { label: "Gói người bán" },
+    ];
   }
   if (pathname === "/posts/create") {
     return [

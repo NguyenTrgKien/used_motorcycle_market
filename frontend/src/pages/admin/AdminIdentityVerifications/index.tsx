@@ -1,46 +1,44 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import axiosInstance from "../../../configs/axiosInstance";
+import IdentityVerificationDetailModal, {
+  type IdentityApplication,
+  type IdentityStatus,
+} from "./IdentityVerificationDetailModal";
+import ApproveIdentityConfirmModal from "./ApproveIdentityConfirmModal";
 
-type Status = "pending" | "processing" | "approved" | "rejected";
-
-interface Application {
-  id: number;
-  idNumber: string;
-  idType: "cccd" | "passport";
-  fullName: string;
-  dateOfBirth: string;
-  gender: "male" | "female" | "other";
-  issueDate: string;
-  issuePlace: string;
-  address: string;
-  idFrontUrl: string;
-  idBackUrl: string;
-  selfieUrl: string;
-  status: Status;
-  rejectionReason?: string;
-  createdAt: string;
-  user: { id: number; fullName?: string; email: string; phone?: string };
-}
-
-const labels: Record<Status, string> = {
+const labels: Record<IdentityStatus, string> = {
   pending: "Chờ duyệt",
   processing: "Đang xử lý",
   approved: "Đã xác minh",
   rejected: "Từ chối",
 };
 
+const statusStyles: Record<IdentityStatus, string> = {
+  pending: "bg-amber-50 text-amber-700 ring-amber-600/20",
+  processing: "bg-blue-50 text-blue-700 ring-blue-600/20",
+  approved: "bg-green-50 text-green-700 ring-green-600/20",
+  rejected: "bg-red-50 text-red-700 ring-red-600/20",
+};
+
+const formatDate = (value: string) =>
+  new Date(value).toLocaleDateString("vi-VN");
+
 function AdminIdentityVerifications() {
-  const [applications, setApplications] = useState<Application[]>([]);
+  const [applications, setApplications] = useState<IdentityApplication[]>([]);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<number | null>(null);
+  const [selectedApplication, setSelectedApplication] =
+    useState<IdentityApplication | null>(null);
+  const [approvalApplication, setApprovalApplication] =
+    useState<IdentityApplication | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       const response = await axiosInstance.get<{
-        data: Application[];
+        data: IdentityApplication[];
         total: number;
       }>("/api/v1/user-identity/admin/applications", {
         params: { status: status || undefined, limit: 100 },
@@ -51,14 +49,14 @@ function AdminIdentityVerifications() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [status]);
 
   useEffect(() => {
     void load();
-  }, [status]);
+  }, [load]);
 
   const action = async (
-    application: Application,
+    application: IdentityApplication,
     type: "processing" | "approve" | "reject",
   ) => {
     let body: { reason?: string } | undefined;
@@ -74,6 +72,8 @@ function AdminIdentityVerifications() {
         body,
       );
       toast.success(response.data.message);
+      if (type === "reject") setSelectedApplication(null);
+      if (type === "approve") setApprovalApplication(null);
       await load();
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Không thể xử lý hồ sơ");
@@ -86,7 +86,9 @@ function AdminIdentityVerifications() {
     <div className="p-6 md:p-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-5">
         <div>
-          <h2 className="text-[2rem] font-semibold">Hồ sơ xác minh danh tính</h2>
+          <h2 className="text-[2rem] font-semibold">
+            Hồ sơ xác minh danh tính
+          </h2>
           <p className="text-[1.3rem] text-gray-500">
             Kiểm tra thông tin và ảnh giấy tờ trước khi phê duyệt.
           </p>
@@ -114,117 +116,106 @@ function AdminIdentityVerifications() {
           Không có hồ sơ phù hợp.
         </div>
       ) : (
-        <div className="space-y-6">
-          {applications.map((application) => {
-            const reviewable =
-              application.status === "pending" ||
-              application.status === "processing";
-            return (
-              <article
-                key={application.id}
-                className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-[1.8rem] font-semibold">
-                      {application.fullName}
-                    </h3>
-                    <p className="text-gray-500">
-                      Tài khoản: {application.user?.email} · ID #{application.user?.id}
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-amber-100 px-4 py-2 font-medium text-amber-700">
-                    {labels[application.status]}
-                  </span>
-                </div>
-
-                <dl className="mt-6 grid gap-4 rounded-xl bg-gray-50 p-5 md:grid-cols-3">
-                  <div>
-                    <dt className="text-gray-500">Giấy tờ</dt>
-                    <dd className="font-medium">
-                      {application.idType === "cccd" ? "CCCD" : "Hộ chiếu"} ·{" "}
-                      {application.idNumber}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-gray-500">Ngày sinh</dt>
-                    <dd>{new Date(application.dateOfBirth).toLocaleDateString("vi-VN")}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-gray-500">Ngày cấp</dt>
-                    <dd>{new Date(application.issueDate).toLocaleDateString("vi-VN")}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-gray-500">Nơi cấp</dt>
-                    <dd>{application.issuePlace}</dd>
-                  </div>
-                  <div className="md:col-span-2">
-                    <dt className="text-gray-500">Địa chỉ</dt>
-                    <dd>{application.address}</dd>
-                  </div>
-                </dl>
-
-                <div className="mt-6 grid gap-4 md:grid-cols-3">
-                  {[
-                    ["Mặt trước", application.idFrontUrl],
-                    ["Mặt sau", application.idBackUrl],
-                    ["Ảnh chân dung", application.selfieUrl],
-                  ].map(([label, url]) => (
-                    <a
-                      key={label}
-                      href={url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="overflow-hidden rounded-xl border border-gray-200"
-                    >
-                      <img src={url} alt={label} className="h-[22rem] w-full object-contain" />
-                      <span className="block border-t border-gray-200 p-3 text-center font-medium">
-                        {label}
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="hidden grid-cols-[minmax(220px,1.5fr)_minmax(170px,1fr)_140px_150px_260px] gap-5 border-b border-gray-200 bg-gray-50 px-6 py-4 text-[1.2rem] font-semibold uppercase tracking-wide text-gray-500 lg:grid">
+            <span>Người đăng ký</span>
+            <span>Giấy tờ</span>
+            <span>Ngày gửi</span>
+            <span>Trạng thái</span>
+            <span className="text-center">Thao tác</span>
+          </div>
+          <div className="divide-y divide-gray-200">
+            {applications.map((application) => {
+              const reviewable =
+                application.status === "pending" ||
+                application.status === "processing";
+              const busy = processingId === application.id;
+              return (
+                <article key={application.id}>
+                  <div
+                    className="grid cursor-pointer gap-4 px-5 py-5 transition-colors hover:bg-gray-50 lg:grid-cols-[minmax(220px,1.5fr)_minmax(170px,1fr)_140px_150px_260px] lg:items-center lg:gap-5 lg:px-6"
+                    onClick={() => setSelectedApplication(application)}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-gray-900">
+                        {application.fullName}
+                      </p>
+                      <p className="truncate text-[1.4rem] text-gray-500">
+                        {application.user?.email}
+                      </p>
+                      <p className="text-[1.2rem] text-gray-400">
+                        Mã người dùng: #{application.user?.id}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">
+                        {application.idType === "cccd" ? "CCCD" : "Hộ chiếu"}
+                      </p>
+                      <p className="text-gray-600">({application.idNumber})</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-700">
+                        {formatDate(application.createdAt)}
                       </span>
-                    </a>
-                  ))}
-                </div>
-
-                {application.rejectionReason && (
-                  <p className="mt-5 rounded-lg bg-red-50 p-4 text-red-700">
-                    Lý do từ chối: {application.rejectionReason}
-                  </p>
-                )}
-
-                {reviewable && (
-                  <div className="mt-6 flex flex-wrap justify-end gap-3">
-                    {application.status === "pending" && (
-                      <button
-                        type="button"
-                        disabled={processingId === application.id}
-                        onClick={() => void action(application, "processing")}
-                        className="h-16 rounded-lg border border-gray-300 px-6"
+                    </div>
+                    <div>
+                      <span
+                        className={`inline-flex rounded-full px-5 py-3 text-[1.4rem] font-medium ring-1 ring-inset ${statusStyles[application.status]}`}
                       >
-                        Tiếp nhận
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      disabled={processingId === application.id}
-                      onClick={() => void action(application, "reject")}
-                      className="h-16 rounded-lg bg-red-600 px-6 font-medium text-white"
-                    >
-                      Từ chối
-                    </button>
-                    <button
-                      type="button"
-                      disabled={processingId === application.id}
-                      onClick={() => void action(application, "approve")}
-                      className="h-16 rounded-lg bg-green-600 px-6 font-medium text-white"
-                    >
-                      Phê duyệt
-                    </button>
+                        {labels[application.status]}
+                      </span>
+                    </div>
+                    <div className="flex justify-center gap-2">
+                      {application.status === "pending" && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void action(application, "processing");
+                          }}
+                          className="h-16 rounded-lg bg-blue-600 px-4 text-[1.4rem] font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Bắt đầu xử lý
+                        </button>
+                      )}
+                      {reviewable && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setApprovalApplication(application);
+                          }}
+                          className="h-16 rounded-lg bg-green-600 px-4 text-[1.4rem] font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Phê duyệt
+                        </button>
+                      )}
+                    </div>
                   </div>
-                )}
-              </article>
-            );
-          })}
+                </article>
+              );
+            })}
+          </div>
         </div>
+      )}
+
+      {selectedApplication && (
+        <IdentityVerificationDetailModal
+          application={selectedApplication}
+          busy={processingId === selectedApplication.id}
+          onClose={() => setSelectedApplication(null)}
+          onReject={() => void action(selectedApplication, "reject")}
+        />
+      )}
+      {approvalApplication && (
+        <ApproveIdentityConfirmModal
+          fullName={approvalApplication.fullName}
+          busy={processingId === approvalApplication.id}
+          onClose={() => setApprovalApplication(null)}
+          onConfirm={() => void action(approvalApplication, "approve")}
+        />
       )}
     </div>
   );

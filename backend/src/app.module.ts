@@ -29,6 +29,8 @@ import { GeminiRateLimiterModule } from './modules/gemini-rate-limiter/gemini-ra
 import { ViewHistoryModule } from './modules/view_history/view_history.module';
 import { ProfessionalSellerModule } from './modules/professional_seller/professional_seller.module';
 import { ListingPaymentModule } from './modules/listing_payment/listing-payment.module';
+import { MonetizationModule } from './modules/monetization/monetization.module';
+import { AdminDashboardModule } from './modules/admin_dashboard/admin-dashboard.module';
 
 @Module({
   imports: [
@@ -59,6 +61,8 @@ import { ListingPaymentModule } from './modules/listing_payment/listing-payment.
     ViewHistoryModule,
     ProfessionalSellerModule,
     ListingPaymentModule,
+    MonetizationModule,
+    AdminDashboardModule,
   ],
   controllers: [AppController, AddressController],
   providers: [AppService],

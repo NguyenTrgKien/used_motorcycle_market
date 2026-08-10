@@ -30,12 +30,17 @@ export class UserIdentityController {
   }
 
   @Roles(UserRole.USER)
+  @Get('me/images')
+  getMineImages(@Req() req: RequestWithUser) {
+    return this.service.getMineImages(req.user.id);
+  }
+
+  @Roles(UserRole.USER)
   @Post('application')
   @UseInterceptors(
     FileFieldsInterceptor([
       { name: 'idFront', maxCount: 1 },
       { name: 'idBack', maxCount: 1 },
-      { name: 'selfie', maxCount: 1 },
     ]),
   )
   submit(
@@ -45,10 +50,29 @@ export class UserIdentityController {
     files: {
       idFront?: Express.Multer.File[];
       idBack?: Express.Multer.File[];
-      selfie?: Express.Multer.File[];
     },
   ) {
     return this.service.submit(req.user.id, data, files || {});
+  }
+
+  @Roles(UserRole.USER)
+  @Patch('application')
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'idFront', maxCount: 1 },
+      { name: 'idBack', maxCount: 1 },
+    ]),
+  )
+  update(
+    @Req() req: RequestWithUser,
+    @Body() data: CreateUserIdentityDto,
+    @UploadedFiles()
+    files: {
+      idFront?: Express.Multer.File[];
+      idBack?: Express.Multer.File[];
+    },
+  ) {
+    return this.service.update(req.user.id, data, files || {});
   }
 
   @Roles(UserRole.ADMIN)

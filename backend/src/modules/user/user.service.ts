@@ -41,6 +41,7 @@ import { UserAddress } from '../user_address/entities/user_address.entity';
 import { UserIdentity } from '../user_identity/entities/user_identity.entity';
 import { UserSession } from '../user_session/entities/user_session.entity';
 import { CreateStaffDto } from './dto/create-staff.dto';
+import { UpdateStaffDto } from './dto/update-staff.dto';
 
 @Injectable()
 export class UserService {
@@ -79,10 +80,22 @@ export class UserService {
   }
 
   async getMe(userId: number) {
-    const user = await this.findUserById(userId);
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      relations: ['addresses', 'professionalSellerProfile'],
+    });
     if (!user) {
       throw new NotFoundException('Không tìm thấy người dùng!');
     }
+
+    const professionalSellerProfile =
+      user.professionalSellerProfile?.status === 'approved'
+        ? {
+            id: user.professionalSellerProfile.id,
+            storeName: user.professionalSellerProfile.storeName,
+            status: user.professionalSellerProfile.status,
+          }
+        : undefined;
 
     return {
       user: {
@@ -94,6 +107,7 @@ export class UserService {
         avatar: user.avatar,
         role: user.role,
         sellerType: user.sellerType,
+        professionalSellerProfile,
         isGoogleLinked: Boolean(user.googleId),
         isFaceBookLinked: Boolean(user.facebookId),
         createdAt: user.createdAt,
@@ -335,12 +349,11 @@ export class UserService {
     const user = await this.userRepo.findOne({
       where: {
         id,
-        role: UserRole.USER,
       },
     });
 
     if (!user) {
-      throw new NotFoundException('Khong tim thay nguoi dung');
+      throw new NotFoundException('Không tìm thấy người dùng');
     }
 
     const postCounts = await this.postRepo
@@ -635,6 +648,54 @@ export class UserService {
     };
   }
 
+  async updateStaff(
+    adminId: number,
+    staffId: number,
+    dataUpdate: UpdateStaffDto,
+  ) {
+    const admin = await this.userRepo.findOne({
+      where: { id: adminId, role: UserRole.ADMIN },
+    });
+    if (!admin) {
+      throw new BadRequestException('Ban khong co quyen cap nhat nhan vien');
+    }
+
+    const staff = await this.userRepo.findOne({ where: { id: staffId } });
+    if (!staff || ![UserRole.ADMIN, UserRole.MODERATOR, UserRole.CSKH].includes(staff.role)) {
+      throw new NotFoundException('Khong tim thay nhan vien');
+    }
+
+    const fullName = dataUpdate.fullName.trim();
+    const email = dataUpdate.email.trim().toLowerCase();
+    const phone = dataUpdate.phone?.trim() || undefined;
+
+    if (!fullName) {
+      throw new BadRequestException('Ho ten khong duoc de trong');
+    }
+
+    const existingEmail = await this.userRepo.findOne({ where: { email } });
+    if (existingEmail && existingEmail.id !== staffId) {
+      throw new BadRequestException('Email da ton tai');
+    }
+
+    if (phone) {
+      const existingPhone = await this.userRepo.findOne({ where: { phone } });
+      if (existingPhone && existingPhone.id !== staffId) {
+        throw new BadRequestException('So dien thoai da ton tai');
+      }
+    }
+
+    staff.fullName = fullName;
+    staff.email = email;
+    staff.phone = phone;
+    const updatedStaff = await this.userRepo.save(staff);
+
+    return {
+      message: 'Cap nhat thong tin nhan vien thanh cong',
+      data: this.toAdminUser(updatedStaff),
+    };
+  }
+
   async getUserById(id: number) {
     try {
       const user = await this.userRepo.findOne({
@@ -838,8 +899,12 @@ export class UserService {
       await this.userRepo.update(user.id, {
         email: newEmail.trim().toLowerCase(),
       });
-    } catch (error: any) {
-      if (error?.code === '23505' || error?.code === 'ER_DUP_ENTRY') {
+    } catch (error: unknown) {
+      const errorCode =
+        typeof error === 'object' && error && 'code' in error
+          ? (error as { code?: string }).code
+          : undefined;
+      if (errorCode === '23505' || errorCode === 'ER_DUP_ENTRY') {
         throw new BadRequestException(
           'Email đã được đăng ký bằng tài khoản khác.',
         );
@@ -870,8 +935,12 @@ export class UserService {
         phone: newPhone,
         phoneVerifiedAt: new Date(),
       });
-    } catch (error: any) {
-      if (error?.code === '23505' || error?.code === 'ER_DUP_ENTRY') {
+    } catch (error: unknown) {
+      const errorCode =
+        typeof error === 'object' && error && 'code' in error
+          ? (error as { code?: string }).code
+          : undefined;
+      if (errorCode === '23505' || errorCode === 'ER_DUP_ENTRY') {
         throw new BadRequestException(
           'Số điện thoại đã được liên kết với tài khoản khác.',
         );
@@ -891,6 +960,22 @@ export class UserService {
   }
 
   async deleteAccount(userId: number) {
+    const identity = await this.dataSource
+      .getRepository(UserIdentity)
+      .createQueryBuilder('identity')
+      .addSelect([
+        'identity.idFrontPublicId',
+        'identity.idBackPublicId',
+        'identity.selfiePublicId',
+      ])
+      .where('identity.userId = :userId', { userId })
+      .getOne();
+    const identityPublicIds = [
+      identity?.idFrontPublicId,
+      identity?.idBackPublicId,
+      identity?.selfiePublicId,
+    ].filter((value): value is string => Boolean(value));
+
     await this.dataSource.transaction(async (manager) => {
       const user = await manager.findOne(User, {
         where: { id: userId },
@@ -1029,6 +1114,14 @@ export class UserService {
         .execute();
       await manager.delete(User, userId);
     });
+
+    if (identityPublicIds.length) {
+      try {
+        await this.cloudinaryService.deleteFiles(identityPublicIds);
+      } catch (error) {
+        console.error('Không thể xóa ảnh danh tính trên Cloudinary', error);
+      }
+    }
 
     return {
       message: 'Xoa tai khoan thanh cong!',

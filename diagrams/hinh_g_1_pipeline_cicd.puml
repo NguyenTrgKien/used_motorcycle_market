@@ -1,0 +1,40 @@
+@startuml
+title Hình G.1 - Pipeline CI/CD đề xuất
+left to right direction
+actor "Lập trình viên" as Dev
+rectangle "Git Repository" as Git
+rectangle "CI Pipeline" {
+  component "Cài dependency" as Install
+  component "Lint + Type Check" as Lint
+  component "Unit/Integration Test" as Test
+  component "Build Frontend/Backend" as Build
+  component "Quét dependency" as Scan
+  component "Đóng gói Docker Image" as Docker
+}
+rectangle "Staging" {
+  component "Chạy migration" as MigrationS
+  component "Deploy staging" as DeployS
+  component "Smoke/E2E Test" as Smoke
+}
+rectangle "Production" {
+  component "Phê duyệt phát hành" as Approval
+  component "Backup + Migration" as MigrationP
+  component "Rolling/Blue-Green Deploy" as DeployP
+  component "Health Check + Monitoring" as Monitor
+}
+Dev --> Git : Push/Pull Request
+Git --> Install
+Install --> Lint
+Lint --> Test
+Test --> Build
+Build --> Scan
+Scan --> Docker
+Docker --> MigrationS
+MigrationS --> DeployS
+DeployS --> Smoke
+Smoke --> Approval
+Approval --> MigrationP
+MigrationP --> DeployP
+DeployP --> Monitor
+Monitor --> Dev : Cảnh báo/Phản hồi
+@enduml

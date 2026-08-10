@@ -24,6 +24,13 @@ export interface UserInfoForm {
 function Profile() {
   const { user } = useUser();
   const navigate = useNavigate();
+  const storeProfile =
+    user.sellerType === "professional"
+      ? user.professionalSellerProfile
+      : undefined;
+  const publicProfilePath = storeProfile
+    ? `/stores/${storeProfile.id}`
+    : `/users/${user.id}`;
   const [showSelectAddress, setShowSelectAddress] = useState(false);
   const [address, setAddress] = useState<UserAddressType | null>(null);
   const [showChangeEmail, setShowChangeEmail] = useState(false);
@@ -68,10 +75,10 @@ function Profile() {
       <div className="mb-8 flex items-center justify-between gap-4">
         <h4 className="text-[2rem] font-medium">Thông tin cơ bản</h4>
         <Link
-          to={`/users/${user.id}`}
+          to={publicProfilePath}
           className="inline-flex h-[3.8rem] shrink-0 items-center gap-2 rounded-xl border border-gray-300 px-4 text-[1.4rem] text-gray-700 transition-colors hover:bg-gray-50"
         >
-          Xem hồ sơ công khai
+          {storeProfile ? "Xem trang cửa hàng" : "Xem hồ sơ công khai"}
           <FontAwesomeIcon icon={faAngleRight} className="text-gray-500" />
         </Link>
       </div>

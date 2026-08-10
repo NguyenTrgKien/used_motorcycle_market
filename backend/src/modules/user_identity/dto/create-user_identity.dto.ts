@@ -1,10 +1,12 @@
 import { Transform } from 'class-transformer';
 import {
   IsDateString,
+  IsBoolean,
   IsEnum,
   IsNotEmpty,
   IsString,
   MaxLength,
+  Equals,
 } from 'class-validator';
 import { IdType, UserGender } from 'src/shared';
 
@@ -12,6 +14,11 @@ const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
 export class CreateUserIdentityDto {
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  @Equals(true, { message: 'Bạn phải xác nhận chỉ sử dụng dữ liệu mô phỏng' })
+  demoConsent: boolean;
+
   @Transform(trim)
   @IsString()
   @IsNotEmpty()

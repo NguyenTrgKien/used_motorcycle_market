@@ -20,6 +20,11 @@ export interface UserType {
   gender: UserGender;
   role: UserRole;
   sellerType: SellerType;
+  professionalSellerProfile?: {
+    id: number;
+    storeName: string;
+    status: "approved";
+  };
   status: UserStatus;
   isVerified: boolean;
   isPhoneVerified: boolean;

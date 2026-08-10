@@ -37,7 +37,10 @@ function RecommendationSection({
   }
 
   return (
-    <section id="recommendations" className="mt-8 scroll-mt-24 rounded-2xl bg-white">
+    <section
+      id="recommendations"
+      className="mt-8 scroll-mt-24 rounded-2xl bg-white"
+    >
       <SectionHeading
         title="Dành cho bạn"
         description={

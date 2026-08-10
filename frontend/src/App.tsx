@@ -43,6 +43,13 @@ import AdminRevenue from "./pages/admin/AdminRevenue";
 import AdminTransactions from "./pages/admin/AdminTransactions";
 import IdentityVerification from "./pages/user/setting/IdentityVerification";
 import AdminIdentityVerifications from "./pages/admin/AdminIdentityVerifications";
+import PromotionPlans from "./pages/user/Post/PromotionPlans";
+import AdminMonetization from "./pages/admin/AdminMonetization";
+import AdminReports from "./pages/admin/AdminReports";
+import SellerPlans from "./pages/user/setting/SellerPlans";
+import ListingPayment from "./pages/user/ListingPayment";
+import TransactionHistory from "./pages/user/TransactionHistory";
+import MyReports from "./pages/user/MyReports";
 
 const adminRoles = [UserRole.ADMIN, UserRole.MODERATOR, UserRole.CSKH];
 const postReviewRoles = [UserRole.ADMIN, UserRole.MODERATOR];
@@ -95,6 +102,14 @@ function App() {
             </GuardRoute>
           }
         />
+        <Route
+          path="/my-reports"
+          element={
+            <GuardRoute requireAuth={true} roles={[UserRole.USER]}>
+              <MyReports />
+            </GuardRoute>
+          }
+        />
         <Route path="/users/:id" element={<PublicProfile />} />
         <Route path="/stores/:id" element={<StorePage />} />
         <Route path="/posts/:slug" element={<PostDetail />} />
@@ -115,10 +130,34 @@ function App() {
           }
         />
         <Route
+          path="/payment"
+          element={
+            <GuardRoute requireAuth={true} roles={[UserRole.USER]}>
+              <ListingPayment />
+            </GuardRoute>
+          }
+        />
+        <Route
           path="/payment-result"
           element={
             <GuardRoute requireAuth={true} roles={[UserRole.USER]}>
               <ListingPaymentResult />
+            </GuardRoute>
+          }
+        />
+        <Route
+          path="/transactions"
+          element={
+            <GuardRoute requireAuth={true} roles={[UserRole.USER]}>
+              <TransactionHistory />
+            </GuardRoute>
+          }
+        />
+        <Route
+          path="/posts/:id/promotions"
+          element={
+            <GuardRoute requireAuth={true} roles={[UserRole.USER]}>
+              <PromotionPlans />
             </GuardRoute>
           }
         />
@@ -147,6 +186,14 @@ function App() {
           }
         />
         <Route
+          path="/seller/plans"
+          element={
+            <GuardRoute requireAuth={true} roles={[UserRole.USER]}>
+              <SellerPlans />
+            </GuardRoute>
+          }
+        />
+        <Route
           path="/setting"
           element={
             <GuardRoute requireAuth={true}>
@@ -167,6 +214,10 @@ function App() {
           />
           <Route path="login-tracking" element={<LoginTracking />} />
           <Route path="professional-seller" element={<ProfessionalSeller />} />
+          <Route
+            path="seller-plans"
+            element={<Navigate to="/seller/plans" replace />}
+          />
           <Route path="identity-verification" element={<IdentityVerification />} />
         </Route>
       </Route>
@@ -205,6 +256,14 @@ function App() {
           element={
             <GuardRoute requireAuth={true} roles={[UserRole.ADMIN]}>
               <Dashboard />
+            </GuardRoute>
+          }
+        />
+        <Route
+          path="monetization"
+          element={
+            <GuardRoute requireAuth={true} roles={[UserRole.ADMIN]}>
+              <AdminMonetization />
             </GuardRoute>
           }
         />
@@ -281,6 +340,14 @@ function App() {
           }
         />
         <Route
+          path="reports"
+          element={
+            <GuardRoute requireAuth={true} roles={[UserRole.ADMIN, UserRole.CSKH]}>
+              <AdminReports />
+            </GuardRoute>
+          }
+        />
+        <Route
           path="notifications"
           element={
             <GuardRoute
@@ -333,7 +400,7 @@ function App() {
           element={
             <GuardRoute
               requireAuth={true}
-              roles={postReviewRoles}
+              roles={[UserRole.ADMIN, UserRole.MODERATOR, UserRole.CSKH]}
               area="admin"
             >
               <PostReview readOnly />

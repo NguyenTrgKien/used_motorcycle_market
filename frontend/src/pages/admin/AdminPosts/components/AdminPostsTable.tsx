@@ -130,7 +130,11 @@ function AdminPostRow({
     <article className="grid gap-4 p-5 xl:grid-cols-[10rem_1.2fr_1fr_0.8fr_0.8fr_14rem] xl:items-center">
       <div className="h-[8rem] overflow-hidden rounded-lg border border-gray-300 bg-gray-50">
         {image ? (
-          <img src={image} alt={post.title} className="h-full w-full object-cover" />
+          <img
+            src={image}
+            alt={post.title}
+            className="h-full w-full object-cover"
+          />
         ) : (
           <div className="flex h-full items-center justify-center text-[1.2rem] text-gray-400">
             Không có ảnh
@@ -168,7 +172,9 @@ function AdminPostRow({
 
       <div className="flex items-center gap-3 text-gray-600">
         <div className="min-w-0">
-          <p className="truncate font-medium">{post.user?.fullName || "Người bán"}</p>
+          <p className="truncate font-medium">
+            {post.user?.fullName || "Người bán"}
+          </p>
           <p className="truncate text-[1.4rem] text-gray-400">
             {post.user?.phone || "Chưa công khai SĐT"}
           </p>
@@ -202,6 +208,7 @@ function AdminPostRow({
         {isPending ? (
           <Link
             to={`/admin/posts/pending/${post.slug}`}
+            state={{ from: "/admin/posts" }}
             className="flex h-18 flex-1 items-center justify-center gap-2 rounded-lg border border-gray-300 font-medium text-gray-600 transition-colors hover:bg-gray-50"
           >
             <FontAwesomeIcon icon={faEye} />
@@ -222,8 +229,8 @@ function AdminPostRow({
           </span>
         ) : (
           <Link
-            to={`/posts/${post.slug}`}
-            target="_blank"
+            to={`/admin/posts/view/${post.slug}`}
+            state={{ from: "/admin/posts" }}
             className="flex h-18 flex-1 items-center justify-center gap-2 rounded-lg border border-gray-300 font-medium text-gray-600 transition-colors hover:bg-gray-50"
           >
             <FontAwesomeIcon icon={faEye} />

@@ -55,6 +55,12 @@ export class ListingPaymentController {
   }
 
   @Roles(UserRole.USER)
+  @Get('orders')
+  findMyOrders(@Req() req: RequestWithUser) {
+    return this.paymentService.findMyOrders(req.user.id);
+  }
+
+  @Roles(UserRole.USER)
   @Patch('orders/:id/submit-bank-transfer')
   @UseInterceptors(
     FileInterceptor('receipt', {

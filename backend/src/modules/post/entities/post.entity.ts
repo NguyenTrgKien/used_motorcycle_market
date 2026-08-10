@@ -94,6 +94,18 @@ export class Post {
   @Column({ default: false })
   freeQuotaRefunded: boolean;
 
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  promotionType?: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  promotionStartedAt?: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  promotionExpiredAt?: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastBoostedAt?: Date | null;
+
   @Column({ type: 'timestamp', nullable: true })
   approvedAt?: Date;
 

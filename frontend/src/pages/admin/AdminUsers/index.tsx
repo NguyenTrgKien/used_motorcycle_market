@@ -15,6 +15,7 @@ import axiosInstance from "../../../configs/axiosInstance";
 import { UserRole, UserStatus } from "../../../shared";
 import avatarDefault from "../../../assets/images/avatar_default.png";
 import { useNavigate } from "react-router-dom";
+import BanUserModal from "../components/BanUserModal";
 
 interface ManagedUser {
   id: number;
@@ -75,14 +76,6 @@ const statusBadgeClasses: Record<UserStatus, string> = {
   [UserStatus.ACTIVE]: "bg-emerald-100 text-emerald-700",
   [UserStatus.BANNED]: "bg-red-100 text-red-700",
 };
-
-const defaultBanReasons = [
-  "Tài khoản có dấu hiệu lừa đảo hoặc giả mạo",
-  "Đăng tin sai sự thật hoặc gây hiểu nhầm",
-  "Spam tin nhắn, bình luận hoặc nội dung quảng cáo",
-  "Vi phạm chính sách cộng đồng nhiều lần",
-  "Có hành vi quấy rối hoặc xúc phạm người dùng khác",
-];
 
 const formatDate = (value?: string) => {
   if (!value) return "Chưa cập nhật";
@@ -619,64 +612,14 @@ function AdminUsers() {
       )}
 
       {banningUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-[44rem] rounded-lg bg-white p-6 shadow-xl">
-            <h2 className="text-[2rem] font-semibold">Khóa người dùng</h2>
-            <p className="mt-2 text-[1.4rem] text-gray-500">
-              {banningUser.fullName || banningUser.email}
-            </p>
-            <div className="mt-5 rounded-lg border border-gray-300 p-4">
-              <div className="flex flex-wrap gap-2">
-                {defaultBanReasons.map((reason) => (
-                  <button
-                    key={reason}
-                    type="button"
-                    disabled={updatingId === banningUser.id}
-                    onClick={() => setBanReason(reason)}
-                    className={`rounded-full border px-5 py-3 text-start text-[1.4rem] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                      banReason === reason
-                        ? "border-red-300 bg-red-50 text-red-600"
-                        : "border-gray-300 bg-white text-gray-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-                    }`}
-                  >
-                    {reason}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <label className="mt-5 block">
-              <span className="text-[1.3rem] font-semibold text-gray-600">
-                Lý do khóa
-              </span>
-              <textarea
-                value={banReason}
-                onChange={(e) => setBanReason(e.target.value)}
-                rows={4}
-                className="mt-2 w-full resize-none rounded-lg border border-gray-300 p-4 outline-none focus:border-amber-400"
-                placeholder="Nhập lý do khóa tài khoản"
-              />
-            </label>
-            <div className="mt-5 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setBanningUser(null)}
-                className="h-18 rounded-lg border border-gray-300 px-5 font-medium text-gray-600 transition-colors hover:bg-gray-50"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                disabled={updatingId === banningUser.id}
-                onClick={() => void handleConfirmBan()}
-                className="h-18 rounded-lg bg-red-600 px-5 font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {updatingId === banningUser.id
-                  ? "Đang xử lý..."
-                  : "Xác nhận khóa"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <BanUserModal
+          userName={banningUser.fullName || banningUser.email}
+          reason={banReason}
+          isSubmitting={updatingId === banningUser.id}
+          onReasonChange={setBanReason}
+          onClose={() => setBanningUser(null)}
+          onConfirm={() => void handleConfirmBan()}
+        />
       )}
     </section>
   );

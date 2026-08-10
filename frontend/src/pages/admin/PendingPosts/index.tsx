@@ -223,10 +223,10 @@ function PendingPosts() {
                     <div className="flex items-center gap-2 text-gray-500">
                       {new Date(post.createdAt).toLocaleDateString("vi-VN")}
                     </div>
-                          
+
                     <Link
                       to={`/admin/posts/pending/${post.slug}`}
-                      className="flex h-12 items-center justify-center gap-2 rounded-lg border border-gray-300 font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                      className="flex h-16 items-center justify-center gap-2 rounded-lg border border-gray-300 font-medium text-gray-600 transition-colors hover:bg-gray-50"
                     >
                       <FontAwesomeIcon icon={faEye} />
                       Chi tiết

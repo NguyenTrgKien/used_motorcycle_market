@@ -31,6 +31,11 @@ import { TwoFactorSendOtpDto } from './dto/two-factor-send-otp.dto';
 import { Verify2FaOtpDto } from './dto/verify-2fa-otp.dto';
 import { VerifyLoginOtpDto } from './dto/verify-login-otp.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
+import {
+  RequestPhoneVerificationDto,
+  ResendPhoneVerificationDto,
+  VerifyPhoneVerificationDto,
+} from './dto/phone-verification.dto';
 
 export interface RequestWithUser extends ExpressRequest {
   user: User;
@@ -61,7 +66,10 @@ export class AuthController {
       // secure: true,
       // sameSite: 'none' as const,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
+      sameSite:
+        process.env.NODE_ENV === 'production'
+          ? ('none' as const)
+          : ('lax' as const),
     };
 
     res.cookie('access_token', result.access_token, {
@@ -198,7 +206,10 @@ export class AuthController {
       // secure: true,
       // sameSite: 'none',
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
+      sameSite:
+        process.env.NODE_ENV === 'production'
+          ? ('none' as const)
+          : ('lax' as const),
     });
 
     res.clearCookie('refresh_token', {
@@ -206,7 +217,10 @@ export class AuthController {
       // secure: true,
       // sameSite: 'none',
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
+      sameSite:
+        process.env.NODE_ENV === 'production'
+          ? ('none' as const)
+          : ('lax' as const),
     });
 
     return res.json({
@@ -249,6 +263,41 @@ export class AuthController {
     return this.authService.resendChangeContactOtp(user);
   }
 
+  @Post('/phone-verification/request')
+  @HttpCode(HttpStatus.OK)
+  requestPhoneVerification(
+    @Body() data: RequestPhoneVerificationDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.authService.requestPhoneVerification(
+      req.user.id,
+      data,
+      this.getDeviceInfo(req).ipAddress,
+    );
+  }
+
+  @Post('/phone-verification/verify')
+  @HttpCode(HttpStatus.OK)
+  verifyPhoneVerification(
+    @Body() data: VerifyPhoneVerificationDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.authService.verifyPhoneVerification(req.user.id, data);
+  }
+
+  @Post('/phone-verification/resend')
+  @HttpCode(HttpStatus.OK)
+  resendPhoneVerification(
+    @Body() data: ResendPhoneVerificationDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.authService.resendPhoneVerification(
+      req.user.id,
+      data,
+      this.getDeviceInfo(req).ipAddress,
+    );
+  }
+
   @Public()
   @UseGuards(LocalAuthGuard)
   @Post('/login')
@@ -284,7 +333,7 @@ export class AuthController {
     if (!refresh_token) {
       return res.status(HttpStatus.UNAUTHORIZED).json({
         status: false,
-        message: 'Phien dang nhap khong hop le',
+        message: 'Phiên đăng nhập không hợp lệ',
       });
     }
 
@@ -293,7 +342,10 @@ export class AuthController {
     res.cookie('access_token', result.access_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
+      sameSite:
+        process.env.NODE_ENV === 'production'
+          ? ('none' as const)
+          : ('lax' as const),
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -329,7 +381,10 @@ export class AuthController {
       // secure: true,
       // sameSite: 'none',
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
+      sameSite:
+        process.env.NODE_ENV === 'production'
+          ? ('none' as const)
+          : ('lax' as const),
     });
 
     res.clearCookie('refresh_token', {
@@ -337,7 +392,10 @@ export class AuthController {
       // secure: true,
       // sameSite: 'none',
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
+      sameSite:
+        process.env.NODE_ENV === 'production'
+          ? ('none' as const)
+          : ('lax' as const),
     });
 
     return res.json({
@@ -380,13 +438,19 @@ export class AuthController {
     res.clearCookie('access_token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
+      sameSite:
+        process.env.NODE_ENV === 'production'
+          ? ('none' as const)
+          : ('lax' as const),
     });
 
     res.clearCookie('refresh_token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
+      sameSite:
+        process.env.NODE_ENV === 'production'
+          ? ('none' as const)
+          : ('lax' as const),
     });
 
     return res.json({
@@ -414,7 +478,10 @@ export class AuthController {
       // secure: true,
       // sameSite: 'none' as const,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
+      sameSite:
+        process.env.NODE_ENV === 'production'
+          ? ('none' as const)
+          : ('lax' as const),
     };
 
     res.cookie('access_token', result.access_token, {

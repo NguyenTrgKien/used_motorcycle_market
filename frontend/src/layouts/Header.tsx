@@ -15,6 +15,8 @@ import {
   faSearch,
   faStar,
   faTableCells,
+  faTags,
+  faReceipt,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   faBell,
@@ -79,7 +81,13 @@ const utilities = [
     icon: faClockRotateLeft,
     link: "/history",
   },
-  { id: 5, title: "Đánh giá từ tôi", icon: faStar, link: "/my-reviews" },
+  {
+    id: 5,
+    title: "Lịch sử giao dịch",
+    icon: faReceipt,
+    link: "/transactions",
+  },
+  { id: 6, title: "Đánh giá từ tôi", icon: faStar, link: "/my-reviews" },
 ];
 const others = [
   {
@@ -110,9 +118,14 @@ function Header() {
     location.pathname.startsWith("/users") ||
     location.pathname.startsWith("/messages") ||
     location.pathname.startsWith("/notifications") ||
+    location.pathname.startsWith("/my-reports") ||
     location.pathname.startsWith("/saved-listings") ||
+    location.pathname.startsWith("/payment") ||
+    location.pathname.startsWith("/transactions") ||
     location.pathname.startsWith("/vehicles") ||
-    location.pathname.startsWith("/posts");
+    location.pathname.startsWith("/posts") ||
+    location.pathname.startsWith("/stores") ||
+    location.pathname.startsWith("/seller");
   const [showPopup, setShowPopup] = useState(false);
   const elementRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -247,8 +260,13 @@ function Header() {
       [NotificationType.NEW_REVIEW]: "/my-reviews",
       [NotificationType.NEW_POST_PENDING]: "/admin/posts/pending",
       [NotificationType.BANK_TRANSFER_SUBMITTED]: "/admin/transactions",
-      [NotificationType.BANK_TRANSFER_REJECTED]: "/posts/manage",
-      [NotificationType.BANK_TRANSFER_CONFIRMED]: "/posts/manage",
+      [NotificationType.BANK_TRANSFER_REJECTED]: "/transactions",
+      [NotificationType.BANK_TRANSFER_CONFIRMED]: "/transactions",
+      [NotificationType.IDENTITY_STATUS_UPDATED]: "/setting/identity-verification",
+      [NotificationType.NEW_IDENTITY_APPLICATION]: "/admin/identity-verifications",
+      [NotificationType.NEW_PROFESSIONAL_SELLER_APPLICATION]: "/admin/professional-sellers",
+      [NotificationType.NEW_REPORT]: "/admin/reports",
+      [NotificationType.REPORT_STATUS_UPDATED]: `/my-reports?reportId=${notification.referenceId}`,
     };
 
     return paths[notification.type] || "/notifications";
@@ -568,7 +586,6 @@ function Header() {
             >
               Quản lý tin
             </button>
-
             {user ? (
               <div className="relative text-gray-600" ref={elementRef}>
                 <button
@@ -637,7 +654,7 @@ function Header() {
                                   navigate(p.link);
                                   setShowPopup(false);
                                 }}
-                                className={`flex items-center justify-between gap-2.5 px-8 py-6 hover:bg-gray-50 transition-colors duration-300 font-semibold hover:cursor-pointer ${index === utilities.length - 1 && "rounded-bl-3xl rounded-br-3xl"} ${index === 0 && "rounded-tl-3xl rounded-tr-3xl"}`}
+                                className={`flex items-center justify-between gap-2.5 px-8 py-6 hover:bg-gray-50 transition-colors duration-300 font-semibold hover:cursor-pointer ${index === utilities.length - 1 && user.sellerType !== "professional" && "rounded-bl-3xl rounded-br-3xl"} ${index === 0 && "rounded-tl-3xl rounded-tr-3xl"}`}
                               >
                                 <div className="flex items-center gap-4">
                                   <FontAwesomeIcon icon={p.icon} />
@@ -656,6 +673,21 @@ function Header() {
                               </div>
                             );
                           })}
+                          {user.sellerType === "professional" && (
+                            <div
+                              onClick={() => {
+                                navigate("/seller/plans");
+                                setShowPopup(false);
+                              }}
+                              className="flex items-center justify-between gap-2.5 rounded-b-3xl border-t border-gray-100 px-8 py-6 font-semibold transition-colors duration-300 hover:cursor-pointer hover:bg-gray-50"
+                            >
+                              <div className="flex items-center gap-4">
+                                <FontAwesomeIcon icon={faTags} />
+                                <p>Gói người bán</p>
+                              </div>
+                              <FontAwesomeIcon icon={faAngleRight} />
+                            </div>
+                          )}
                         </div>
                         <div className="text-[1.4rem] mt-8 font-semibold text-start px-5 py-2">
                           Khác

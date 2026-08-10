@@ -8,6 +8,7 @@ interface PaidOrder {
   amount: number;
   method: "vnpay" | "momo" | "bank_transfer";
   paidAt?: string;
+  orderType: "listing" | "featured" | "vip" | "boost" | "subscription";
   post?: { id: number; title: string };
   user?: { id: number; fullName?: string; email: string };
 }
@@ -50,17 +51,28 @@ function AdminRevenue() {
     () => orders.reduce((total, order) => total + Number(order.amount), 0),
     [orders],
   );
+  const revenueByType = useMemo(() => orders.reduce<Record<string, number>>((result, order) => {
+    const type = order.orderType || "listing";
+    result[type] = (result[type] || 0) + Number(order.amount);
+    return result;
+  }, {}), [orders]);
 
   return (
     <section className="px-5 py-6 md:px-8">
       <div className="space-y-6">
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl border border-gray-200 bg-white p-6">
             <p className="text-gray-500">Tổng doanh thu đăng tin</p>
             <p className="mt-2 text-[2.6rem] font-semibold text-gray-900">
               {totalRevenue.toLocaleString("vi-VN")}đ
             </p>
           </div>
+          {Object.entries(revenueByType).map(([type, amount]) => (
+            <div key={type} className="rounded-2xl border border-gray-200 bg-white p-6">
+              <p className="text-gray-500">{type}</p>
+              <p className="mt-2 text-[2.2rem] font-semibold text-amber-600">{amount.toLocaleString("vi-VN")}đ</p>
+            </div>
+          ))}
           <div className="rounded-2xl border border-gray-200 bg-white p-6">
             <p className="text-gray-500">Giao dịch thành công</p>
             <p className="mt-2 text-[2.6rem] font-semibold text-green-600">

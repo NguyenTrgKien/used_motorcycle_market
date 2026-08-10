@@ -9,6 +9,7 @@ import {
 import {
   ListingPaymentMethod,
   ListingPaymentStatus,
+  MonetizationProductType,
 } from '../listing-payment.types';
 
 @Entity('listing_payment_orders')
@@ -23,8 +24,21 @@ export class ListingPaymentOrder {
   @Column()
   userId: number;
 
-  @Column({ unique: true })
-  postId: number;
+  @Column({ nullable: true })
+  postId?: number;
+
+  @Column({
+    type: 'varchar',
+    length: 30,
+    default: MonetizationProductType.LISTING,
+  })
+  orderType: MonetizationProductType;
+
+  @Column({ nullable: true })
+  pricingPlanId?: number;
+
+  @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
+  metadata: Record<string, unknown>;
 
   @Column({ type: 'int' })
   amount: number;

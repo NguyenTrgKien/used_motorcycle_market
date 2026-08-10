@@ -62,6 +62,18 @@ export interface PostSellerInfo {
   };
 }
 
+export interface BoostCampaignInfo {
+  id: number;
+  postId: number;
+  planName?: string;
+  totalBoosts: number;
+  boostsCompleted: number;
+  startedAt: string;
+  nextBoostAt?: string | null;
+  expectedEndAt?: string;
+  status: "active" | "completed" | "cancelled";
+}
+
 export interface ListingPost {
   id: number;
   title: string;
@@ -79,6 +91,10 @@ export interface ListingPost {
   listingPricingGroup?: "large_vehicle" | "other_vehicle";
   listingFee?: number;
   freeQuotaRefunded?: boolean;
+  promotionType?: "featured" | "vip";
+  promotionStartedAt?: string;
+  promotionExpiredAt?: string;
+  lastBoostedAt?: string;
   rejectedReason?: string;
   hiddenReason?: string;
   hiddenAt?: string;

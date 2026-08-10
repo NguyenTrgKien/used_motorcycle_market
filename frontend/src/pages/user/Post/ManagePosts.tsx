@@ -6,14 +6,15 @@ import {
   faPlus,
   faRotateRight,
   faTrash,
+  faEllipsisVertical,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
+import { io } from "socket.io-client";
 import axiosInstance from "../../../configs/axiosInstance";
-import type { ListingPost } from "./post.types";
-import ListingPaymentModal from "./components/ListingPaymentModal";
+import type { BoostCampaignInfo, ListingPost } from "./post.types";
 
 const statusLabels: Record<string, string> = {
   draft: "Bản nháp",
@@ -35,6 +36,15 @@ const statusClasses: Record<string, string> = {
   rejected: "bg-red-100 text-red-700",
 };
 
+const campaignStatus = {
+  active: { label: "Đang đẩy tin", className: "bg-amber-100 text-amber-700" },
+  completed: {
+    label: "Đã hoàn thành",
+    className: "bg-green-100 text-green-700",
+  },
+  cancelled: { label: "Đã hủy", className: "bg-red-100 text-red-700" },
+};
+
 function ManagePosts() {
   const navigate = useNavigate();
   const [posts, setPosts] = useState<ListingPost[]>([]);
@@ -46,7 +56,10 @@ function ManagePosts() {
   const [deleteConfirmationPost, setDeleteConfirmationPost] =
     useState<ListingPost | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [paymentPost, setPaymentPost] = useState<ListingPost | null>(null);
+  const [openActionPostId, setOpenActionPostId] = useState<number | null>(null);
+  const [boostCampaigns, setBoostCampaigns] = useState<
+    Record<number, BoostCampaignInfo>
+  >({});
 
   const filteredPosts = useMemo(
     () =>
@@ -56,25 +69,62 @@ function ManagePosts() {
     [posts, statusFilter],
   );
 
-  const fetchPosts = async () => {
-    try {
-      setIsLoading(true);
-      const res = await axiosInstance.get<{ data: ListingPost[] }>(
-        "/api/v1/posts/my",
-      );
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: posts.length };
+    for (const post of posts) {
+      counts[post.status] = (counts[post.status] || 0) + 1;
+    }
+    return counts;
+  }, [posts]);
 
-      setPosts(res.data.data || []);
+  const fetchPosts = async (showLoading = true) => {
+    try {
+      if (showLoading) setIsLoading(true);
+      const [postsResponse, campaignsResponse] = await Promise.all([
+        axiosInstance.get<{ data: ListingPost[] }>("/api/v1/posts/my"),
+        axiosInstance.get<{ data: BoostCampaignInfo[] }>(
+          "/api/v1/monetization/boost-campaigns/mine",
+        ),
+      ]);
+      setPosts(postsResponse.data.data || []);
+      const latestCampaigns: Record<number, BoostCampaignInfo> = {};
+      for (const campaign of campaignsResponse.data.data || []) {
+        if (!latestCampaigns[campaign.postId])
+          latestCampaigns[campaign.postId] = campaign;
+      }
+      setBoostCampaigns(latestCampaigns);
     } catch (error: any) {
       toast.error(
         error?.response?.data?.message || "Không thể tải danh sách tin",
       );
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsLoading(false);
     }
   };
 
   useEffect(() => {
     void fetchPosts();
+  }, []);
+
+  useEffect(() => {
+    const socket = io("http://localhost:8080", { withCredentials: true });
+    socket.on("notification.created", (notification: { type: string }) => {
+      if (notification.type === "bank_transfer_confirmed")
+        void fetchPosts(false);
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    const closeActionMenu = (event: MouseEvent) => {
+      if (!(event.target as HTMLElement).closest("[data-post-action-menu]")) {
+        setOpenActionPostId(null);
+      }
+    };
+    document.addEventListener("click", closeActionMenu);
+    return () => document.removeEventListener("click", closeActionMenu);
   }, []);
 
   const handleDelete = async (postId: number) => {
@@ -168,7 +218,7 @@ function ManagePosts() {
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
               >
-                {status === "all" ? "Tất cả" : statusLabels[status]}
+                {status === "all" ? "Tất cả" : statusLabels[status]} ({statusCounts[status] || 0})
               </button>
             ))}
           </div>
@@ -203,6 +253,7 @@ function ManagePosts() {
                 const image =
                   post.post_images?.find((item) => item.isPrimary)?.imageUrl ||
                   post.post_images?.[0]?.imageUrl;
+                const campaign = boostCampaigns[post.id];
 
                 return (
                   <div
@@ -276,6 +327,60 @@ function ManagePosts() {
                           </>
                         )}
                       </div>
+                      {campaign && (
+                        <div className="mt-3 max-w-[52rem] rounded-xl border border-gray-200 bg-gray-50 p-4 ">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`rounded-full px-3 py-1 text-[1.2rem] font-medium ${campaignStatus[campaign.status].className}`}
+                              >
+                                {campaignStatus[campaign.status].label}
+                              </span>
+                              {campaign.planName && (
+                                <span className="text-[1.3rem] text-gray-600">
+                                  {campaign.planName}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[1.3rem] font-medium text-gray-700">
+                              {campaign.boostsCompleted}/{campaign.totalBoosts}{" "}
+                              lượt
+                            </span>
+                          </div>
+                          <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-200">
+                            <div
+                              className="h-full rounded-full bg-amber-500"
+                              style={{
+                                width: `${Math.min((campaign.boostsCompleted / campaign.totalBoosts) * 100, 100)}%`,
+                              }}
+                            />
+                          </div>
+                          <div className="mt-3 grid gap-1 text-[1.2rem] text-gray-500 sm:grid-cols-2">
+                            <p>
+                              Bắt đầu:{" "}
+                              {new Date(campaign.startedAt).toLocaleString(
+                                "vi-VN",
+                              )}
+                            </p>
+                            {campaign.nextBoostAt && (
+                              <p>
+                                Lần đẩy tiếp theo:{" "}
+                                {new Date(campaign.nextBoostAt).toLocaleString(
+                                  "vi-VN",
+                                )}
+                              </p>
+                            )}
+                            {campaign.expectedEndAt && (
+                              <p>
+                                Kết thúc dự kiến:{" "}
+                                {new Date(
+                                  campaign.expectedEndAt,
+                                ).toLocaleString("vi-VN")}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
                       {post.hiddenReason && (
                         <p className="mt-2 line-clamp-2 text-[1.3rem] text-red-500">
                           Lý do xóa: {post.hiddenReason}
@@ -295,77 +400,130 @@ function ManagePosts() {
                         )}
                     </div>
                     <div
-                      className="flex self-end items-center justify-end gap-2"
+                      data-post-action-menu
+                      className="relative flex self-center justify-self-end gap-2"
                       onClick={(event) => event.stopPropagation()}
                       onKeyDown={(event) => event.stopPropagation()}
                     >
-                      {post.status !== "hidden" && (
-                        <Link
-                          to={`/posts/${post.slug}/edit`}
-                          className="flex h-16 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-amber-500 px-4 text-amber-600 transition-colors hover:bg-amber-50"
-                          title="Sửa tin"
-                        >
-                          <FontAwesomeIcon icon={faPenToSquare} />
-                          <span>Sửa tin</span>
-                        </Link>
-                      )}
-                      {post.status === "draft" &&
-                        post.listingBillingType === "paid" &&
-                        (post.paymentOrder?.status === "pending" &&
-                        post.paymentOrder.transferSubmittedAt ? (
-                          <button
-                            type="button"
-                            disabled
-                            className="flex h-16 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-gray-200 px-4 text-gray-600"
-                          >
-                            <FontAwesomeIcon icon={faCreditCard} />
-                            <span>Chờ xác nhận thanh toán</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setPaymentPost(post)}
-                            className="flex h-16 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-amber-500 px-4 text-white transition-colors hover:bg-amber-600"
-                          >
-                            <FontAwesomeIcon icon={faCreditCard} />
-                            <span>
-                              {post.paymentOrder?.status === "rejected"
-                                ? "Gửi lại biên lai"
-                                : "Thanh toán"}
-                            </span>
-                          </button>
-                        ))}
                       {post.status === "active" && (
                         <button
                           type="button"
-                          onClick={() => setSoldConfirmationPost(post)}
-                          className="flex h-16 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-green-600 px-4 text-green-600 transition-colors hover:bg-green-50"
-                          title="Đánh dấu đã bán"
+                          onClick={() =>
+                            navigate(`/posts/${post.id}/promotions`)
+                          }
+                          className="flex h-16 items-center justify-center whitespace-nowrap rounded-xl bg-green-500 px-5 font-medium text-white transition-colors hover:bg-green-600"
                         >
-                          <FontAwesomeIcon icon={faCircleCheck} />
-                          <span>Đã bán</span>
-                        </button>
-                      )}
-                      {post.status === "sold" && (
-                        <button
-                          type="button"
-                          onClick={() => void handleRelist(post.id)}
-                          className="flex h-16 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-blue-600 px-4 text-blue-600 transition-colors hover:bg-blue-50"
-                          title="Đăng bán lại"
-                        >
-                          <FontAwesomeIcon icon={faRotateRight} />
-                          <span>Đăng bán lại</span>
+                          Bán nhanh hơn
                         </button>
                       )}
                       <button
                         type="button"
-                        onClick={() => setDeleteConfirmationPost(post)}
-                        className="flex h-16 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-red-600 px-4 text-red-600 transition-colors hover:bg-red-50"
-                        title="Xóa tin"
+                        aria-label="Mở menu thao tác"
+                        aria-expanded={openActionPostId === post.id}
+                        onClick={() =>
+                          setOpenActionPostId((current) =>
+                            current === post.id ? null : post.id,
+                          )
+                        }
+                        className="flex h-16 w-16 items-center justify-center rounded-xl border border-gray-200 text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-100"
                       >
-                        <FontAwesomeIcon icon={faTrash} />
-                        <span>Xóa tin</span>
+                        <FontAwesomeIcon icon={faEllipsisVertical} />
                       </button>
+                      {openActionPostId === post.id && (
+                        <div className="absolute right-0 top-[calc(100%+0.8rem)] z-30 flex min-w-[24rem] flex-col gap-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
+                          {post.status !== "hidden" && (
+                            <Link
+                              to={`/posts/${post.slug}/edit`}
+                              className="flex h-16 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-amber-500 px-4 text-amber-600 transition-colors hover:bg-amber-50"
+                              title="Sửa tin"
+                            >
+                              <FontAwesomeIcon icon={faPenToSquare} />
+                              <span>Sửa tin</span>
+                            </Link>
+                          )}
+                          {post.status === "draft" &&
+                            post.listingBillingType === "paid" &&
+                            (post.paymentOrder?.status === "pending" &&
+                            post.paymentOrder.transferSubmittedAt ? (
+                              <button
+                                type="button"
+                                disabled
+                                className="flex h-16 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-gray-200 px-4 text-gray-600"
+                              >
+                                <FontAwesomeIcon icon={faCreditCard} />
+                                <span>Chờ xác nhận thanh toán</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenActionPostId(null);
+                                  const params = new URLSearchParams({
+                                    postId: String(post.id),
+                                    amount: String(
+                                      Number(post.listingFee || 30000),
+                                    ),
+                                    orderType: "listing",
+                                    ...(post.paymentOrder?.status === "rejected"
+                                      ? { method: "bank_transfer" }
+                                      : {}),
+                                  });
+                                  navigate(`/payment?${params.toString()}`);
+                                }}
+                                className="flex h-16 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-amber-500 px-4 text-white transition-colors hover:bg-amber-600"
+                              >
+                                <FontAwesomeIcon icon={faCreditCard} />
+                                <span>
+                                  {post.paymentOrder?.status === "rejected"
+                                    ? "Gửi lại biên lai"
+                                    : "Thanh toán"}
+                                </span>
+                              </button>
+                            ))}
+                          {post.status === "active" && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenActionPostId(null);
+                                  setSoldConfirmationPost(post);
+                                }}
+                                className="flex h-16 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-green-600 px-4 text-green-600 transition-colors hover:bg-green-50"
+                                title="Đánh dấu đã bán"
+                              >
+                                <FontAwesomeIcon icon={faCircleCheck} />
+                                <span>Đã bán</span>
+                              </button>
+                            </>
+                          )}
+                          {post.status === "sold" && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenActionPostId(null);
+                                void handleRelist(post.id);
+                              }}
+                              className="flex h-16 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-blue-600 px-4 text-blue-600 transition-colors hover:bg-blue-50"
+                              title="Đăng bán lại"
+                            >
+                              <FontAwesomeIcon icon={faRotateRight} />
+                              <span>Đăng bán lại</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenActionPostId(null);
+                              setDeleteConfirmationPost(post);
+                            }}
+                            className="flex h-16 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-red-600 px-4 text-red-600 transition-colors hover:bg-red-50"
+                            title="Xóa tin"
+                          >
+                            <FontAwesomeIcon icon={faTrash} />
+                            <span>Xóa tin</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -419,19 +577,6 @@ function ManagePosts() {
             </div>
           </div>
         </div>
-      )}
-      {paymentPost && (
-        <ListingPaymentModal
-          postId={paymentPost.id}
-          amount={Number(paymentPost.listingFee || 30000)}
-          onClose={() => setPaymentPost(null)}
-          onPaymentSubmitted={() => void fetchPosts()}
-          initialMethod={
-            paymentPost.paymentOrder?.status === "rejected"
-              ? "bank_transfer"
-              : undefined
-          }
-        />
       )}
       {deleteConfirmationPost && (
         <div

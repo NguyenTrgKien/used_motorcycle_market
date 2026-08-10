@@ -48,7 +48,6 @@ import type {
   SelectOption,
   YearFieldName,
 } from "./types/createPost.types";
-import ListingPaymentModal from "./components/ListingPaymentModal";
 import {
   clearCreatePostDraft,
   readCreatePostDraft,
@@ -93,10 +92,6 @@ function CreatePost() {
   const [isPricing, setIsPricing] = useState(false);
   const [priceSuggestion, setPriceSuggestion] =
     useState<PriceSuggestion | null>(null);
-  const [paymentPost, setPaymentPost] = useState<{
-    id: number;
-    amount: number;
-  } | null>(null);
   const [draftReady, setDraftReady] = useState(isEditing);
   const {
     control,
@@ -905,10 +900,12 @@ function CreatePost() {
           (isEditing ? "Cập nhật tin thành công" : "Đăng tin thành công"),
       );
       if (res.data.paymentRequired) {
-        setPaymentPost({
-          id: res.data.data.id,
-          amount: Number(res.data.data.listingFee || 30000),
+        const params = new URLSearchParams({
+          postId: String(res.data.data.id),
+          amount: String(Number(res.data.data.listingFee || 30000)),
+          orderType: "listing",
         });
+        navigate(`/payment?${params.toString()}`);
         return;
       }
       navigate("/posts/manage");
@@ -1883,14 +1880,6 @@ function CreatePost() {
           }
           onSelect={(year) => handleSelectYear(activeYearPicker, year)}
           onClose={() => setActiveYearPicker(null)}
-        />
-      )}
-
-      {paymentPost && (
-        <ListingPaymentModal
-          postId={paymentPost.id}
-          amount={paymentPost.amount}
-          onClose={() => navigate("/posts/manage")}
         />
       )}
 

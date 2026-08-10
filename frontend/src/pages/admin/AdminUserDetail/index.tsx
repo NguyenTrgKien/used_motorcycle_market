@@ -5,13 +5,15 @@ import {
   faClipboardList,
   faLocationDot,
   faShieldHalved,
+  faUnlock,
 } from "@fortawesome/free-solid-svg-icons";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import axiosInstance from "../../../configs/axiosInstance";
 import avatarDefault from "../../../assets/images/avatar_default.png";
-import { UserStatus } from "../../../shared";
+import { ReasonType, TargetType, UserStatus } from "../../../shared";
+import BanUserModal from "../components/BanUserModal";
 
 interface AdminUserDetailData {
   user: {
@@ -103,6 +105,31 @@ const reportStatusLabels: Record<string, string> = {
   rejected: "Từ chối",
 };
 
+const reportStatusClasses: Record<string, string> = {
+  pending: "bg-amber-100 text-amber-700",
+  resolved: "bg-emerald-100 text-emerald-700",
+  rejected: "bg-gray-100 text-gray-600",
+};
+
+const reportReasonLabels: Record<string, string> = {
+  [ReasonType.FAKE_INFO]: "Thông tin không trung thực",
+  [ReasonType.WRONG_PRICE]: "Giá đăng không đúng",
+  [ReasonType.DUPLICATE_POST]: "Tin đăng trùng lặp",
+  [ReasonType.ALREADY_SOLD]: "Xe đã bán nhưng vẫn đăng tin",
+  [ReasonType.STOLEN_VEHICLE]: "Nghi ngờ xe gian hoặc xe bị đánh cắp",
+  [ReasonType.FAKE_IMAGES]: "Hình ảnh không đúng hoặc giả mạo",
+  [ReasonType.FRAUD]: "Lừa đảo, chiếm đoạt tài sản",
+  [ReasonType.SPAM]: "Spam tin nhắn hoặc tin đăng",
+  [ReasonType.ABUSIVE]: "Ngôn từ xúc phạm hoặc không phù hợp",
+  [ReasonType.SCAM]: "Giả mạo người bán",
+  [ReasonType.OTHER]: "Lý do khác",
+};
+
+const reportTargetLabels: Record<string, string> = {
+  [TargetType.POST]: "Tin đăng",
+  [TargetType.USER]: "Người dùng",
+};
+
 function formatDate(value?: string) {
   if (!value) return "Chưa cập nhật";
   const date = new Date(value);
@@ -153,7 +180,7 @@ function AdminUserDetailSkeleton() {
           <div className="rounded-lg border border-gray-300 bg-white p-5">
             <div className="h-6 w-32 animate-pulse rounded bg-gray-200" />
             <div className="mt-5 space-y-3">
-              <div className="h-5 w-2/3 animate-pulse rounded bg-gray-200" /> 
+              <div className="h-5 w-2/3 animate-pulse rounded bg-gray-200" />
               <div className="h-5 w-full animate-pulse rounded bg-gray-100" />
               {Array.from({ length: 2 }).map((_, index) => (
                 <div
@@ -236,6 +263,26 @@ function AdminUserDetail() {
   const navigate = useNavigate();
   const [data, setData] = useState<AdminUserDetailData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [banReason, setBanReason] = useState("");
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  const fetchDetail = async () => {
+    if (!id) return;
+    try {
+      setIsLoading(true);
+      const res = await axiosInstance.get<AdminUserDetailResponse>(
+        `/api/v1/users/admin/${id}/detail`,
+      );
+      setData(res.data.data);
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.message || "Không thể tải chi tiết người dùng",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const defaultAddress = useMemo(
     () => data?.addresses.find((address) => address.isDefault),
@@ -243,26 +290,41 @@ function AdminUserDetail() {
   );
 
   useEffect(() => {
-    const fetchDetail = async () => {
-      try {
-        setIsLoading(true);
-        const res = await axiosInstance.get<AdminUserDetailResponse>(
-          `/api/v1/users/admin/${id}/detail`,
-        );
-        setData(res.data.data);
-      } catch (error: any) {
-        toast.error(
-          error?.response?.data?.message || "Không thể tải chi tiết người dùng",
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     if (id) {
       void fetchDetail();
     }
   }, [id]);
+
+  const handleUpdateStatus = async () => {
+    if (!data) return;
+    const isBanned = data.user.status === UserStatus.BANNED;
+    const reason = banReason.trim();
+    if (!isBanned && !reason) {
+      toast.error("Vui lòng nhập lý do khóa tài khoản");
+      return;
+    }
+    try {
+      setIsUpdatingStatus(true);
+      const response = await axiosInstance.patch(
+        `/api/v1/users/${data.user.id}/${isBanned ? "unban" : "ban"}`,
+        isBanned ? undefined : { reason },
+      );
+      toast.success(
+        response.data.message ||
+          (isBanned ? "Đã mở khóa tài khoản" : "Đã khóa tài khoản"),
+      );
+      setIsStatusModalOpen(false);
+      setBanReason("");
+      await fetchDetail();
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.message ||
+          "Không thể cập nhật trạng thái tài khoản",
+      );
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
 
   if (isLoading) {
     return <AdminUserDetailSkeleton />;
@@ -306,12 +368,105 @@ function AdminUserDetail() {
             Theo dõi thông tin tài khoản, khu vực, bài đăng và lịch sử vi phạm.
           </p>
         </div>
-        <span
-          className={`inline-flex w-fit rounded-full px-5 py-3 text-[1.4rem] ${statusBadgeClasses[data.user.status]}`}
-        >
-          {statusLabels[data.user.status]}
-        </span>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setBanReason("");
+              setIsStatusModalOpen(true);
+            }}
+            className={`flex px-6 py-3 items-center gap-2 rounded-full text-[1.4rem] font-medium text-white transition-colors ${
+              data.user.status === UserStatus.BANNED
+                ? "bg-emerald-600 hover:bg-emerald-700"
+                : "bg-red-600 hover:bg-red-700"
+            }`}
+          >
+            <FontAwesomeIcon
+              icon={data.user.status === UserStatus.BANNED ? faUnlock : faBan}
+            />
+            {data.user.status === UserStatus.BANNED
+              ? "Mở khóa tài khoản"
+              : "Khóa tài khoản"}
+          </button>
+        </div>
       </div>
+
+      {isStatusModalOpen && data.user.status !== UserStatus.BANNED && (
+        <BanUserModal
+          userName={data.user.fullName || data.user.email}
+          reason={banReason}
+          isSubmitting={isUpdatingStatus}
+          onReasonChange={setBanReason}
+          onClose={() => setIsStatusModalOpen(false)}
+          onConfirm={() => void handleUpdateStatus()}
+        />
+      )}
+
+      {isStatusModalOpen && data.user.status === UserStatus.BANNED && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-5"
+          onMouseDown={() => !isUpdatingStatus && setIsStatusModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-[48rem] rounded-lg bg-white p-6 shadow-xl"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h2 className="text-[2rem] font-semibold text-gray-900">
+              {data.user.status === UserStatus.BANNED
+                ? "Mở khóa tài khoản"
+                : "Khóa tài khoản"}
+            </h2>
+            <p className="mt-2 text-gray-500">
+              {data.user.fullName || data.user.email}
+            </p>
+            {data.user.status !== UserStatus.BANNED ? (
+              <>
+                <label className="mt-5 block font-medium text-gray-700">
+                  Lý do khóa
+                </label>
+                <textarea
+                  value={banReason}
+                  onChange={(event) => setBanReason(event.target.value)}
+                  rows={5}
+                  maxLength={500}
+                  placeholder="Nhập lý do khóa tài khoản..."
+                  className="mt-2 w-full resize-none rounded-lg border border-gray-300 p-4 outline-none focus:border-red-500"
+                />
+              </>
+            ) : (
+              <p className="mt-5 rounded-lg bg-emerald-50 p-4 text-emerald-700">
+                Tài khoản sẽ có thể đăng nhập và sử dụng hệ thống trở lại.
+              </p>
+            )}
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={isUpdatingStatus}
+                onClick={() => setIsStatusModalOpen(false)}
+                className="h-16 rounded-lg border border-gray-300 px-5 font-medium text-gray-700"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={isUpdatingStatus}
+                onClick={() => void handleUpdateStatus()}
+                className={`h-16 rounded-lg px-5 font-medium text-white disabled:opacity-60 ${
+                  data.user.status === UserStatus.BANNED
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-red-600 hover:bg-red-700"
+                }`}
+              >
+                {isUpdatingStatus
+                  ? "Đang cập nhật..."
+                  : data.user.status === UserStatus.BANNED
+                    ? "Xác nhận mở khóa"
+                    : "Xác nhận khóa"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-5 xl:grid-cols-[32rem_1fr]">
         <aside className="space-y-5">
@@ -328,7 +483,12 @@ function AdminUserDetail() {
                 <p className="truncate text-[1.8rem] font-semibold">
                   {data.user.fullName || "Chưa cập nhật tên"}
                 </p>
-                <p className="text-gray-500">ID #{data.user.id}</p>
+                <div className="text-gray-500">ID #{data.user.id} </div>
+                <span
+                  className={`inline-flex px-3 rounded-full py-1 w-fit text-[1.2rem] ${statusBadgeClasses[data.user.status]}`}
+                >
+                  {statusLabels[data.user.status]}
+                </span>
               </div>
             </div>
             <div className="mt-5 space-y-3 text-[1.6rem]">
@@ -503,38 +663,59 @@ function AdminUserDetail() {
                 Chưa ghi nhận vi phạm hoặc báo cáo.
               </p>
             ) : (
-              <div className="divide-y divide-gray-100">
+              <div className="space-y-3 p-5">
                 {data.violations.map((violation) => (
-                  <article key={violation.id} className="p-5">
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <p className="font-semibold text-gray-900">
-                          {violation.reasonType}
-                        </p>
-                        <p className="mt-1 text-[1.3rem] text-gray-500">
-                          Đối tượng: {violation.targetType} #
-                          {violation.targetId}
-                        </p>
-                      </div>
-                      <span className="w-fit rounded-full bg-gray-100 px-4 py-2  text-gray-700">
+                  <article
+                    key={violation.id}
+                    className="rounded-lg border border-gray-200 bg-gray-50 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <p className="font-semibold text-gray-900">
+                        {reportReasonLabels[violation.reasonType] ||
+                          violation.reasonType}
+                      </p>
+                      <span
+                        className={`shrink-0 rounded-full px-5 py-2 text-[1.4rem] font-medium ${
+                          reportStatusClasses[violation.status] ||
+                          "bg-gray-100 text-gray-600"
+                        }`}
+                      >
                         {reportStatusLabels[violation.status] ||
                           violation.status}
                       </span>
                     </div>
-                    <p className="mt-3 text-gray-700">
+                    <p className="mt-3 leading-6 text-gray-700">
                       {violation.reasonDetail}
                     </p>
-                    <p className="mt-2  text-gray-500">
-                      Người báo cáo:{" "}
-                      {violation.reporterName ||
-                        violation.reporterEmail ||
-                        "Không rõ"}{" "}
-                      • {formatDate(violation.createdAt)}
-                    </p>
-                    {violation.note && (
-                      <p className="mt-2  text-gray-500">
-                        Ghi chú: {violation.note}
+                    <div className="mt-4 grid gap-2 border-t border-gray-200 pt-3 text-[1.3rem] text-gray-500 sm:grid-cols-2">
+                      <p>
+                        <span className="font-medium text-gray-600">
+                          Liên quan đến:{" "}
+                        </span>
+                        {reportTargetLabels[violation.targetType] ||
+                          violation.targetType}{" "}
+                        #{violation.targetId}
                       </p>
+                      <p>
+                        <span className="font-medium text-gray-600">
+                          Ngày báo cáo:{" "}
+                        </span>
+                        {formatDate(violation.createdAt)}
+                      </p>
+                      <p className="sm:col-span-2">
+                        <span className="font-medium text-gray-600">
+                          Người báo cáo:{" "}
+                        </span>
+                        {violation.reporterName ||
+                          violation.reporterEmail ||
+                          "Không rõ"}
+                      </p>
+                    </div>
+                    {violation.note && (
+                      <div className="mt-3 rounded-lg bg-white p-3 text-[1.3rem] text-gray-600">
+                        <span className="font-medium">Kết quả xử lý: </span>
+                        {violation.note}
+                      </div>
                     )}
                   </article>
                 ))}

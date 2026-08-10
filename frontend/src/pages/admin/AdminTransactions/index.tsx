@@ -1,18 +1,30 @@
-import { useEffect, useState } from "react";
+import { type MouseEvent, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import axiosInstance from "../../../configs/axiosInstance";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
+import {
+  faCheck,
+  faEllipsisVertical,
+  faEye,
+  faMagnifyingGlass,
+  faXmark,
+} from "@fortawesome/free-solid-svg-icons";
 import { useNavigate } from "react-router-dom";
 import PaymentConfirmationSuccessModal from "./PaymentConfirmationSuccessModal";
+import TransactionDetailModal from "./TransactionDetailModal";
 
 interface TransferOrder {
   id: string;
   code: string;
   amount: number;
-  status: "pending" | "paid" | "failed" | "cancelled" | "rejected";
+  method?: "vnpay" | "momo" | "bank_transfer";
+  orderType: "listing" | "featured" | "vip" | "boost" | "subscription";
+  status: "pending" | "paid" | "failed" | "cancelled" | "rejected" | "expired";
   receiptUrl?: string;
   transferSubmittedAt?: string;
+  paidAt?: string;
+  createdAt?: string;
+  expiresAt?: string;
   rejectedReason?: string;
   rejectedAt?: string;
   rejectionHistory?: Array<{
@@ -23,6 +35,21 @@ interface TransferOrder {
   }>;
   post?: { id: number; title: string; slug: string };
   user?: { id: number; fullName?: string; email: string };
+}
+
+const transactionTypes = {
+  listing: { label: "Phí đăng tin", className: "bg-blue-50 text-blue-700" },
+  boost: { label: "Đẩy tin", className: "bg-amber-50 text-amber-700" },
+  featured: { label: "Tin nổi bật", className: "bg-purple-50 text-purple-700" },
+  vip: { label: "Tin VIP", className: "bg-red-50 text-red-700" },
+  subscription: {
+    label: "Gói người bán",
+    className: "bg-green-50 text-green-700",
+  },
+};
+
+function getTransactionType(orderType: TransferOrder["orderType"]) {
+  return transactionTypes[orderType] || transactionTypes.listing;
 }
 
 const defaultRejectionReasons = [
@@ -48,6 +75,43 @@ function AdminTransactions() {
   const [successfulOrder, setSuccessfulOrder] = useState<TransferOrder | null>(
     null,
   );
+  const [detailOrder, setDetailOrder] = useState<TransferOrder | null>(null);
+  const [actionMenu, setActionMenu] = useState<{
+    order: TransferOrder;
+    right: number;
+    top?: number;
+    bottom?: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!actionMenu) return;
+    const closeMenu = () => setActionMenu(null);
+    window.addEventListener("resize", closeMenu);
+    window.addEventListener("scroll", closeMenu, true);
+    return () => {
+      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
+    };
+  }, [actionMenu]);
+
+  const toggleActionMenu = (
+    event: MouseEvent<HTMLButtonElement>,
+    order: TransferOrder,
+  ) => {
+    if (actionMenu?.order.id === order.id) {
+      setActionMenu(null);
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const openUpward = window.innerHeight - rect.bottom < 190;
+    setActionMenu({
+      order,
+      right: Math.max(16, window.innerWidth - rect.right),
+      ...(openUpward
+        ? { bottom: window.innerHeight - rect.top + 8 }
+        : { top: rect.bottom + 8 }),
+    });
+  };
 
   const loadOrders = async () => {
     try {
@@ -135,6 +199,7 @@ function AdminTransactions() {
       order.code,
       order.post?.id,
       order.post?.title,
+      getTransactionType(order.orderType).label,
       order.user?.id,
       order.user?.fullName,
       order.user?.email,
@@ -184,7 +249,7 @@ function AdminTransactions() {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Tìm theo mã giao dịch, tin đăng, người đăng hoặc email"
-                className="h-[5.6rem] w-full rounded-lg border border-gray-300 bg-white pl-14 pr-5 text-[1.6rem] text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-gray-500"
+                className="h-18 w-full rounded-lg border border-gray-300 bg-white pl-14 pr-5 text-[1.6rem] text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-gray-500"
               />
             </div>
           </div>
@@ -215,6 +280,7 @@ function AdminTransactions() {
                     <th className="p-4">Mã</th>
                     <th className="p-4">Người đăng</th>
                     <th className="p-4">Tin đăng</th>
+                    <th className="p-4">Loại giao dịch</th>
                     <th className="p-4">Số tiền</th>
                     <th className="p-4">Biên lai</th>
                     <th className="p-4 text-center">Thao tác</th>
@@ -243,8 +309,17 @@ function AdminTransactions() {
                             {order.post.title}
                           </button>
                         ) : (
-                          <span className="text-gray-400">Tin không tồn tại</span>
+                          <span className="text-gray-400">
+                            Tin không tồn tại
+                          </span>
                         )}
+                      </td>
+                      <td className="p-4">
+                        <span
+                          className={`inline-flex whitespace-nowrap rounded-full px-6 py-3 text-[1.4rem] font-medium ${getTransactionType(order.orderType).className}`}
+                        >
+                          {getTransactionType(order.orderType).label}
+                        </span>
                       </td>
                       <td className="p-4 font-medium">
                         {Number(order.amount).toLocaleString("vi-VN")}đ
@@ -266,33 +341,23 @@ function AdminTransactions() {
                           <span className="text-gray-400">Chưa gửi</span>
                         )}
                       </td>
-                      <td className="p-4">
-                        {order.status === "pending" ? (
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setRejectOrder(order)}
-                              className="rounded-xl border border-red-500 px-4 py-3 text-red-600"
-                            >
-                              Từ chối
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmOrder(order)}
-                              className="rounded-xl bg-green-500 px-4 py-3 text-white transition-colors hover:bg-green-600"
-                            >
-                              Xác nhận
-                            </button>
-                          </div>
-                        ) : order.status === "rejected" ? (
-                          <span className="line-clamp-2 text-red-600">
-                            {order.rejectedReason}
-                          </span>
-                        ) : (
-                          <span className="font-medium text-green-600">
-                            Đã xác nhận
-                          </span>
-                        )}
+                      <td className="w-[9rem] p-4 text-center">
+                        <button
+                          type="button"
+                          aria-label={`Mở thao tác cho giao dịch ${order.code}`}
+                          aria-expanded={actionMenu?.order.id === order.id}
+                          onClick={(event) => toggleActionMenu(event, order)}
+                          className={`inline-flex h-16 w-16 items-center justify-center rounded-xl border transition-colors ${
+                            actionMenu?.order.id === order.id
+                              ? "border-gray-800 bg-gray-800 text-white"
+                              : "border-gray-300 bg-white text-gray-600 hover:border-gray-400 hover:bg-gray-50"
+                          }`}
+                        >
+                          <FontAwesomeIcon
+                            icon={faEllipsisVertical}
+                            className="text-[1.8rem]"
+                          />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -302,6 +367,67 @@ function AdminTransactions() {
           )}
         </div>
       </div>
+
+      {actionMenu && (
+        <>
+          <button
+            type="button"
+            aria-label="Đóng menu thao tác"
+            onClick={() => setActionMenu(null)}
+            className="fixed inset-0 z-[900] cursor-default"
+          />
+          <div
+            role="menu"
+            className="fixed z-[901] w-[20rem] overflow-hidden rounded-xl border border-gray-200 bg-white p-2 shadow-xl"
+            style={{
+              right: actionMenu.right,
+              top: actionMenu.top,
+              bottom: actionMenu.bottom,
+            }}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setDetailOrder(actionMenu.order);
+                setActionMenu(null);
+              }}
+              className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-gray-700 transition-colors hover:bg-gray-100"
+            >
+              <FontAwesomeIcon icon={faEye} className="w-7 text-gray-400" />
+              <span>Chi tiết</span>
+            </button>
+            {actionMenu.order.status === "pending" && (
+              <>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setRejectOrder(actionMenu.order);
+                    setActionMenu(null);
+                  }}
+                  className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-red-600 transition-colors hover:bg-red-50"
+                >
+                  <FontAwesomeIcon icon={faXmark} className="w-7" />
+                  <span>Từ chối</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setConfirmOrder(actionMenu.order);
+                    setActionMenu(null);
+                  }}
+                  className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-green-600 transition-colors hover:bg-green-50"
+                >
+                  <FontAwesomeIcon icon={faCheck} className="w-7" />
+                  <span>Xác nhận</span>
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
 
       {confirmOrder && (
         <DecisionModal
@@ -314,11 +440,28 @@ function AdminTransactions() {
         />
       )}
 
+      {detailOrder && (
+        <TransactionDetailModal
+          order={detailOrder}
+          typeLabel={getTransactionType(detailOrder.orderType).label}
+          onClose={() => setDetailOrder(null)}
+          onViewPost={
+            detailOrder.post?.slug
+              ? () => navigate(`/admin/posts/view/${detailOrder.post?.slug}`)
+              : undefined
+          }
+        />
+      )}
+
       {successfulOrder && (
         <PaymentConfirmationSuccessModal
           orderCode={successfulOrder.code}
           postTitle={successfulOrder.post?.title}
-          canViewPost={Boolean(successfulOrder.post?.slug)}
+          isSubscription={successfulOrder.orderType === "subscription"}
+          canViewPost={Boolean(
+            successfulOrder.orderType !== "subscription" &&
+            successfulOrder.post?.slug,
+          )}
           onClose={() => setSuccessfulOrder(null)}
           onViewPost={() => {
             const slug = successfulOrder.post?.slug;
@@ -418,6 +561,14 @@ function DecisionModal({
           <p className="flex justify-between gap-4">
             <span className="text-gray-500">Mã giao dịch</span>
             <span className="font-semibold">{order.code}</span>
+          </p>
+          <p className="flex justify-between gap-4">
+            <span className="text-gray-500">Loại giao dịch</span>
+            <span
+              className={`rounded-full px-3 py-1 text-[1.2rem] font-medium ${getTransactionType(order.orderType).className}`}
+            >
+              {getTransactionType(order.orderType).label}
+            </span>
           </p>
           <p className="flex justify-between gap-4">
             <span className="text-gray-500">Số tiền</span>

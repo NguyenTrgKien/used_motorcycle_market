@@ -16,7 +16,7 @@ function MainLayout() {
         <Header />
         <main className="flex-1">
           <PageBreadcrumb />
-          <Outlet />
+          <Outlet key={location.key} />
         </main>
         {!isMessagesPage && <Footer />}
       </div>

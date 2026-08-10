@@ -16,6 +16,7 @@ import { UserVerification } from '../user_verification/entities/user_verificatio
 import { MailModule } from '../mail/mail.module';
 import { GoogleStrategy } from './strategys/google.strategy';
 import { UserSessionModule } from '../user_session/user_session.module';
+import { PhoneOtpDeliveryService } from './phone-otp-delivery.service';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { UserSessionModule } from '../user_session/user_session.module';
     LocalStrategy,
     JwtStrategy,
     GoogleStrategy,
+    PhoneOtpDeliveryService,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

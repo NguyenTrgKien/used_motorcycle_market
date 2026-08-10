@@ -9,7 +9,9 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UploadedFiles,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { PostService } from './post.service';
@@ -24,6 +26,14 @@ import { Public } from 'src/common/decorators/public.decorator';
 import { Roles } from 'src/common/decorators/role.decorator';
 import { UserRole } from 'src/shared';
 import type { RequestWithUser } from '../auth/auth.controller';
+import type { Request, Response } from 'express';
+import { randomUUID } from 'crypto';
+import { OptionalAuthGuard } from '../auth/guards/optional.guard';
+import { POST_VIEWER_COOKIE } from './post.constants';
+
+type OptionalAuthRequest = Request & {
+  user?: { id: number } | null;
+};
 
 @Controller('posts')
 export class PostController {
@@ -98,7 +108,7 @@ export class PostController {
     return this.postService.findPendingForAdmin(query);
   }
 
-  @Roles(UserRole.ADMIN, UserRole.MODERATOR)
+  @Roles(UserRole.ADMIN, UserRole.MODERATOR, UserRole.CSKH)
   @Get('admin/review/:slug')
   findReviewForAdmin(@Param('slug') slug: string) {
     return this.postService.findReviewForAdmin(slug);
@@ -151,6 +161,35 @@ export class PostController {
   @Get(':slug')
   findOne(@Param('slug') slug: string) {
     return this.postService.findOne(slug);
+  }
+
+  @Public()
+  @UseGuards(OptionalAuthGuard)
+  @Post(':id/view')
+  recordView(
+    @Req() req: OptionalAuthRequest,
+    @Res({ passthrough: true }) res: Response,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const cookies = req.cookies as Record<string, string> | undefined;
+    let viewerId = cookies?.[POST_VIEWER_COOKIE];
+    const validViewerId =
+      viewerId &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        viewerId,
+      );
+
+    if (!req.user?.id && !validViewerId) {
+      viewerId = randomUUID();
+      res.cookie(POST_VIEWER_COOKIE, viewerId, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 365 * 24 * 60 * 60 * 1000,
+      });
+    }
+
+    return this.postService.recordView(id, req.user?.id, viewerId || '');
   }
 
   @Roles(UserRole.USER)

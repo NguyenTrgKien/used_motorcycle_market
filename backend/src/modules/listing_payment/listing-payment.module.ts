@@ -10,6 +10,7 @@ import { User } from '../user/entities/user.entity';
 import { NotificationModule } from '../notification/notification.module';
 import { ProfessionalSellerProfile } from '../professional_seller/entities/professional_seller_profile.entity';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
+import { MonetizationModule } from '../monetization/monetization.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { CloudinaryModule } from '../cloudinary/cloudinary.module';
     ]),
     NotificationModule,
     CloudinaryModule,
+    MonetizationModule,
   ],
   controllers: [ListingPaymentController],
   providers: [ListingPaymentService],

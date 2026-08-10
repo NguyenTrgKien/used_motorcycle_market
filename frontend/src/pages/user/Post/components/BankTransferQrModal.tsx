@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faXmark } from "@fortawesome/free-solid-svg-icons";
 import { toast } from "react-toastify";
 import axiosInstance from "../../../../configs/axiosInstance";
 
@@ -68,7 +70,15 @@ function BankTransferQrModal({
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-6">
-      <div className="max-h-[92vh] w-full max-w-[48rem] overflow-y-auto rounded-2xl bg-white p-8 shadow-2xl">
+      <div className="relative max-h-[92vh] w-full max-w-[48rem] overflow-y-auto rounded-2xl bg-white p-8 shadow-2xl">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Đóng modal VietQR"
+          className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+        >
+          <FontAwesomeIcon icon={faXmark} />
+        </button>
         <h2 className="text-center text-[2.2rem] font-semibold text-gray-900">
           Quét mã VietQR
         </h2>

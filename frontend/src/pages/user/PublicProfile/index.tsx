@@ -7,16 +7,21 @@ import {
   faShareNodes,
   faShieldHalved,
   faStar,
+  faFlag,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import axiosInstance from "../../../configs/axiosInstance";
 import type { UserType } from "../../../types/user.type";
 import PostCard from "../HomePage/components/PostCard";
 import type { PostsResponse } from "../HomePage/types";
 import type { ListingPost } from "../Post/post.types";
+import ReportModal from "../../../components/ReportModal";
+import { TargetType } from "../../../shared";
+import { useUser } from "../../../hooks/useUser";
+import useAuthModal from "../../../hooks/useAuthModal";
 
 interface PublicUserResponse {
   message: string;
@@ -51,6 +56,10 @@ function usePublicPosts(userId: string | undefined, status: "active" | "sold") {
 
 function PublicProfile() {
   const { id } = useParams();
+  const { user: currentUser } = useUser();
+  const { openAuthModal } = useAuthModal();
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isReported, setIsReported] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<"active" | "sold">(
     "active",
   );
@@ -96,6 +105,19 @@ function PublicProfile() {
         .filter(Boolean)
         .join(", ")
     : "Chưa công khai địa chỉ";
+
+  useEffect(() => {
+    if (!currentUser?.id || !user?.id || currentUser.id === user.id) {
+      setIsReported(false);
+      return;
+    }
+    void axiosInstance
+      .get("/api/v1/report/status", {
+        params: { targetType: TargetType.USER, targetId: user.id },
+      })
+      .then((response) => setIsReported(Boolean(response.data.data?.reported)))
+      .catch(() => setIsReported(false));
+  }, [currentUser?.id, user?.id]);
 
   const handleShare = async () => {
     const shareData = {
@@ -248,6 +270,17 @@ function PublicProfile() {
                     <FontAwesomeIcon icon={faPlus} />
                     Theo dõi
                   </button>
+                  {currentUser?.id !== user.id && (
+                    <button
+                      type="button"
+                      onClick={() => currentUser?.id ? setIsReportOpen(true) : openAuthModal()}
+                      disabled={isReported}
+                      className="inline-flex h-[4.2rem] items-center gap-2 rounded-full px-5 text-[1.4rem] font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+                    >
+                      <FontAwesomeIcon icon={faFlag} />
+                      {isReported ? "Đã báo cáo - đang chờ xử lý" : "Báo cáo"}
+                    </button>
+                  )}
                 </div>
 
                 {user.personalInfo && (
@@ -340,6 +373,7 @@ function PublicProfile() {
           </Link>
         </div>
       </div>
+      <ReportModal isOpen={isReportOpen} targetId={user.id} targetType={TargetType.USER} targetName={user.fullName || user.email} onClose={() => setIsReportOpen(false)} onSubmitted={() => setIsReported(true)} />
     </main>
   );
 }

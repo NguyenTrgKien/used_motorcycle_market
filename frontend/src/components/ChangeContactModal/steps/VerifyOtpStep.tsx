@@ -26,6 +26,11 @@ function VerifyOtpStep({
   loading,
 }: VerifyOtpStepProps) {
   const isEmail = type === "email";
+  const displayedValue = isEmail
+    ? value
+    : value.length > 7
+      ? `${value.slice(0, 3)}${"*".repeat(value.length - 7)}${value.slice(-4)}`
+      : value;
 
   return (
     <div className="p-8">
@@ -41,7 +46,7 @@ function VerifyOtpStep({
           </span>
         </p>
 
-        <p className="text-amber-600 font-medium mt-1">{value}</p>
+        <p className="text-amber-600 font-medium mt-1">{displayedValue}</p>
       </div>
 
       <div className="flex justify-center mt-10">

@@ -2,7 +2,6 @@ import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBell,
-  faCheckDouble,
   faCommentDots,
   faFileCircleCheck,
   faInbox,
@@ -74,12 +73,37 @@ const notificationMeta: Record<
   [NotificationType.BANK_TRANSFER_REJECTED]: {
     icon: faTriangleExclamation,
     className: "bg-red-100 text-red-700",
-    fallbackPath: "/posts/manage",
+    fallbackPath: "/transactions",
   },
   [NotificationType.BANK_TRANSFER_CONFIRMED]: {
     icon: faFileCircleCheck,
     className: "bg-emerald-100 text-emerald-700",
-    fallbackPath: "/posts/manage",
+    fallbackPath: "/transactions",
+  },
+  [NotificationType.IDENTITY_STATUS_UPDATED]: {
+    icon: faFileCircleCheck,
+    className: "bg-blue-100 text-blue-700",
+    fallbackPath: "/setting/identity-verification",
+  },
+  [NotificationType.NEW_IDENTITY_APPLICATION]: {
+    icon: faFileCircleCheck,
+    className: "bg-amber-100 text-amber-700",
+    fallbackPath: "/admin/identity-verifications",
+  },
+  [NotificationType.NEW_PROFESSIONAL_SELLER_APPLICATION]: {
+    icon: faBell,
+    className: "bg-purple-100 text-purple-700",
+    fallbackPath: "/admin/professional-sellers",
+  },
+  [NotificationType.NEW_REPORT]: {
+    icon: faBell,
+    className: "bg-red-100 text-red-700",
+    fallbackPath: "/admin/reports",
+  },
+  [NotificationType.REPORT_STATUS_UPDATED]: {
+    icon: faFileCircleCheck,
+    className: "bg-blue-100 text-blue-700",
+    fallbackPath: "/my-reports",
   },
 };
 
@@ -121,13 +145,8 @@ function Notifications() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [isMarkingAll, setIsMarkingAll] = useState(false);
   const [filter, setFilter] = useState<NotificationFilter>("all");
 
-  const hasUnread = useMemo(
-    () => notifications.some((notification) => !notification.isRead),
-    [notifications],
-  );
   const filteredNotifications = useMemo(() => {
     if (filter === "unread") {
       return notifications.filter((notification) => !notification.isRead);
@@ -186,6 +205,9 @@ function Notifications() {
   }, []);
 
   const getNotificationPath = (notification: NotificationItem) => {
+    if (notification.type === NotificationType.REPORT_STATUS_UPDATED) {
+      return `/my-reports?reportId=${notification.referenceId}`;
+    }
     const meta = notificationMeta[notification.type];
     return meta?.fallbackPath || "/notifications";
   };
@@ -215,25 +237,6 @@ function Notifications() {
     navigate(getNotificationPath(notification));
   };
 
-  const handleMarkAllRead = async () => {
-    if (!hasUnread) return;
-
-    try {
-      setIsMarkingAll(true);
-      await axiosInstance.patch("/api/v1/notifications/read-all");
-      setNotifications((prev) =>
-        prev.map((notification) => ({ ...notification, isRead: true })),
-      );
-      setUnreadCount(0);
-    } catch (error: any) {
-      toast.error(
-        error?.response?.data?.message || "Không thể đánh dấu thông báo",
-      );
-    } finally {
-      setIsMarkingAll(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gray-100 px-5 pb-14 pt-[2rem] md:px-10 lg:px-[20rem]">
       <div className="mx-auto max-w-[90rem]">
@@ -246,15 +249,6 @@ function Notifications() {
               Bạn có {unreadCount} thông báo chưa đọc
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleMarkAllRead}
-            disabled={!hasUnread || isMarkingAll}
-            className="flex h-14 w-fit items-center gap-3 rounded-xl bg-gray-900 px-5 text-[1.4rem] font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"
-          >
-            <FontAwesomeIcon icon={faCheckDouble} />
-            {isMarkingAll ? "Đang cập nhật..." : "Đánh dấu đã đọc"}
-          </button>
         </div>
 
         <div className="mb-5 flex rounded-xl border border-gray-200 bg-white p-1">

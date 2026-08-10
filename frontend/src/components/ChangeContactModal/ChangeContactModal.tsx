@@ -29,6 +29,7 @@ function ChangeContactModal({ type, onClose }: ChangeContactModalProps) {
   const queryClient = useQueryClient();
 
   const isLinkingPhone = type === "phone" && !user?.phone;
+  const phoneVerificationType = isLinkingPhone ? "add_phone" : "change_phone";
 
   const [step, setStep] = useState<Step>(
     isLinkingPhone ? "contactInput" : "verifyPassword",
@@ -77,6 +78,13 @@ function ChangeContactModal({ type, onClose }: ChangeContactModalProps) {
 
   const requestContactOtpMutation = useMutation({
     mutationFn: async () => {
+      if (type === "phone") {
+        return await axiosInstance.post("/api/v1/auth/phone-verification/request", {
+          phone: contactValue.trim(),
+          type: phoneVerificationType,
+          ...(!isLinkingPhone ? { password } : {}),
+        });
+      }
       return await axiosInstance.post("/api/v1/auth/contact/change", {
         contact: contactValue.trim(),
       });
@@ -84,7 +92,7 @@ function ChangeContactModal({ type, onClose }: ChangeContactModalProps) {
 
     onSuccess: (res: any) => {
       toast.success(res.data.message);
-      startCountdown();
+      startCountdown(res.data.cooldownEndsAt);
       setOtp(Array(6).fill(""));
       setStep("verifyOtp");
     },
@@ -96,6 +104,15 @@ function ChangeContactModal({ type, onClose }: ChangeContactModalProps) {
 
   const verifyContactOtpMutation = useMutation({
     mutationFn: async () => {
+      if (type === "phone") {
+        return await axiosInstance.post(
+          "/api/v1/auth/phone-verification/verify",
+          {
+            otp: otp.join("").trim(),
+            type: phoneVerificationType,
+          },
+        );
+      }
       return await axiosInstance.post(
         "/api/v1/auth/verify-change-contact-otp",
         {
@@ -116,8 +133,14 @@ function ChangeContactModal({ type, onClose }: ChangeContactModalProps) {
   });
 
   const resendOtpMutation = useMutation({
-    mutationFn: async () =>
-      axiosInstance.post("/api/v1/auth/resend-change-contact-otp"),
+    mutationFn: async () => {
+      if (type === "phone") {
+        return axiosInstance.post("/api/v1/auth/phone-verification/resend", {
+          type: phoneVerificationType,
+        });
+      }
+      return axiosInstance.post("/api/v1/auth/resend-change-contact-otp");
+    },
   });
 
   const handleVerifyPassword = () => {
@@ -163,13 +186,13 @@ function ChangeContactModal({ type, onClose }: ChangeContactModalProps) {
     if (!canResend) return;
 
     try {
-      resendOtpMutation.mutate();
+      const res = await resendOtpMutation.mutateAsync();
 
       setOtp(Array(6).fill(""));
       inputRefs.current[0]?.focus();
-      startCountdown();
+      startCountdown(res.data.cooldownEndsAt);
 
-      toast.success("Đã gửi lại OTP");
+      toast.success(res.data.message || "Đã gửi lại OTP");
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Không thể gửi lại OTP");
     }

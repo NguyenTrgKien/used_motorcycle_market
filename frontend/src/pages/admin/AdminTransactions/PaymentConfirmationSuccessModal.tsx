@@ -7,6 +7,7 @@ import {
 interface PaymentConfirmationSuccessModalProps {
   orderCode: string;
   postTitle?: string;
+  isSubscription: boolean;
   canViewPost: boolean;
   onClose: () => void;
   onViewPost: () => void;
@@ -15,6 +16,7 @@ interface PaymentConfirmationSuccessModalProps {
 function PaymentConfirmationSuccessModal({
   orderCode,
   postTitle,
+  isSubscription,
   canViewPost,
   onClose,
   onViewPost,
@@ -39,15 +41,17 @@ function PaymentConfirmationSuccessModal({
         <p className="mt-2 text-[1.4rem] leading-6 text-gray-600">
           Giao dịch{" "}
           <span className="font-semibold text-gray-900">{orderCode}</span> đã
-          được xác nhận. Tin đăng đã chuyển sang trạng thái chờ duyệt.
+          được xác nhận. {isSubscription
+            ? "Gói người bán đã được kích hoạt."
+            : "Tin đăng đã chuyển sang trạng thái chờ duyệt."}
         </p>
-        {postTitle && (
+        {(isSubscription || postTitle) && (
           <div className="mt-5 rounded-xl bg-gray-50 px-4 py-3 text-left">
             <p className="text-[1.2rem] font-medium uppercase text-gray-500">
-              Tin đăng
+              {isSubscription ? "Gói đăng ký" : "Tin đăng"}
             </p>
             <p className="mt-1 line-clamp-2 text-[1.4rem] font-medium text-gray-900">
-              {postTitle}
+              {isSubscription ? "Gói người bán" : postTitle}
             </p>
           </div>
         )}
@@ -59,7 +63,7 @@ function PaymentConfirmationSuccessModal({
           >
             Đóng
           </button>
-          {canViewPost && (
+          {canViewPost && !isSubscription && (
             <button
               type="button"
               onClick={onViewPost}

@@ -63,7 +63,8 @@ function AdminPosts() {
       const filterParams = Object.fromEntries(
         Object.entries(appliedFilters).filter(([key, value]) => {
           if (!value || value === "all") return false;
-          if (value === emptyFilters[key as keyof AdminPostFilters]) return false;
+          if (value === emptyFilters[key as keyof AdminPostFilters])
+            return false;
 
           return true;
         }),

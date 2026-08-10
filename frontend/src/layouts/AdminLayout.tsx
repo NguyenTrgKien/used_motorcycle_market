@@ -13,6 +13,7 @@ import {
   faUsers,
   faIdCard,
   faMoneyCheckDollar,
+  faTags,
 } from "@fortawesome/free-solid-svg-icons";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
@@ -55,6 +56,12 @@ const adminNavItems = [
     label: "Doanh thu",
     icon: faChartLine,
     path: "/admin/revenue",
+    roles: [UserRole.ADMIN],
+  },
+  {
+    label: "Bảng giá & dịch vụ",
+    icon: faTags,
+    path: "/admin/monetization",
     roles: [UserRole.ADMIN],
   },
   {
@@ -167,9 +174,21 @@ const pageTitles: Record<string, { eyebrow: string; title: string }> = {
     eyebrow: "Thanh toán đăng tin",
     title: "Xử lý giao dịch",
   },
+  "/admin/monetization": {
+    eyebrow: "Cấu hình doanh thu",
+    title: "Bảng giá và dịch vụ",
+  },
   "/admin/messages": {
     eyebrow: "Hỗ trợ khách hàng",
     title: "Tin nhắn",
+  },
+  "/admin/reports": {
+    eyebrow: "Hỗ trợ khách hàng",
+    title: "Báo cáo vi phạm",
+  },
+  "/admin/notifications": {
+    eyebrow: "Trung tâm thông báo",
+    title: "Thông báo admin",
   },
 };
 
@@ -196,18 +215,21 @@ function AdminLayout() {
   const visibleAdminNavItems = adminNavItems.filter(
     (item) => user?.role && item.roles.includes(user.role),
   );
-  const pageTitle =
-    location.pathname === "/admin/notifications"
-      ? {
-          eyebrow: "Trung tam thong bao",
-          title: "Thong bao admin",
-        }
-      : location.pathname.startsWith("/admin/posts/pending/")
+  const pageTitle = location.pathname.startsWith("/admin/posts/pending/")
         ? {
             eyebrow: "Kiểm duyệt tin đăng",
             title: "Chi tiết tin chờ duyệt",
           }
-        : pageTitles[location.pathname] || pageTitles[defaultAdminPath];
+        : location.pathname.startsWith("/admin/posts/view/")
+          ? {
+              eyebrow: "Thông tin tin đăng",
+              title: "Chi tiết tin đăng",
+            }
+          : pageTitles[location.pathname] ||
+            pageTitles[defaultAdminPath] || {
+              eyebrow: "Khu vực quản trị",
+              title: "Quản trị hệ thống",
+            };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -303,6 +325,14 @@ function AdminLayout() {
       [NotificationType.BANK_TRANSFER_SUBMITTED]: "/admin/transactions",
       [NotificationType.BANK_TRANSFER_REJECTED]: "/posts/manage",
       [NotificationType.BANK_TRANSFER_CONFIRMED]: "/posts/manage",
+      [NotificationType.IDENTITY_STATUS_UPDATED]:
+        "/admin/identity-verifications",
+      [NotificationType.NEW_IDENTITY_APPLICATION]:
+        "/admin/identity-verifications",
+      [NotificationType.NEW_PROFESSIONAL_SELLER_APPLICATION]:
+        "/admin/professional-sellers",
+      [NotificationType.NEW_REPORT]: "/admin/reports",
+      [NotificationType.REPORT_STATUS_UPDATED]: "/notifications",
     };
 
     return paths[notification.type] || "/admin/dashboard";
@@ -454,7 +484,7 @@ function AdminLayout() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.2 }}
                       exit={{ opacity: 0, y: -12 }}
-                      className="absolute right-0 top-[calc(100%+1rem)] z-[999] w-[calc(100vw-2rem)] max-w-[38rem] overflow-hidden rounded-xl border border-gray-200 bg-white text-gray-700 shadow-xl"
+                      className="absolute right-0 top-[calc(100%+1rem)] z-[999] w-[calc(100vw-2rem)] max-w-[45rem] overflow-hidden rounded-xl border border-gray-200 bg-white text-gray-700 shadow-xl"
                     >
                       <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
                         <div>
@@ -471,13 +501,13 @@ function AdminLayout() {
                             setShowNotifications(false);
                             navigate("/admin/notifications");
                           }}
-                          className="text-[1.3rem] font-medium text-amber-600"
+                          className="text-[1.4rem] font-medium text-amber-600"
                         >
                           Xem tất cả
                         </button>
                       </div>
 
-                      <div className="max-h-[34rem] overflow-y-auto">
+                      <div className="max-h-[40rem] overflow-y-auto">
                         {isLoadingNotifications ? (
                           <div className="space-y-3 p-5">
                             {Array.from({ length: 3 }).map((_, index) => (
@@ -502,7 +532,7 @@ function AdminLayout() {
                               onClick={() =>
                                 void handleOpenNotification(notification)
                               }
-                              className={`flex w-full gap-3 border-b border-gray-100 px-5 py-4 text-left transition-colors last:border-b-0 hover:bg-amber-50 ${
+                              className={`flex w-full gap-3 border-b border-gray-100 px-5 py-4 text-left transition-colors last:border-b-0 ${
                                 notification.isRead
                                   ? "bg-white"
                                   : "bg-amber-50/70"
@@ -520,7 +550,7 @@ function AdminLayout() {
                                     <span className="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500" />
                                   )}
                                 </span>
-                                <span className="mt-1 line-clamp-2 text-[1.3rem] text-gray-600">
+                                <span className="mt-1 line-clamp-2 text-[1.4rem] text-gray-600">
                                   {notification.content}
                                 </span>
                                 <span className="mt-2 block text-[1.2rem] text-gray-400">
@@ -557,7 +587,7 @@ function AdminLayout() {
           </div>
         </header>
 
-        <Outlet />
+        <Outlet key={location.key} />
       </main>
 
       <TransactionNotificationModal

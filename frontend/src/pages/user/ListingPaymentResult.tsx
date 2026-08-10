@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import axiosInstance from "../../configs/axiosInstance";
+import MonetizationOffers from "./Post/components/MonetizationOffers";
 
 function ListingPaymentResult() {
   const [status, setStatus] = useState("pending");
+  const [postId, setPostId] = useState<number | null>(null);
 
   useEffect(() => {
     const orderId = sessionStorage.getItem("pendingListingPaymentOrderId");
@@ -19,6 +21,7 @@ function ListingPaymentResult() {
           `/api/v1/listing-payments/orders/${orderId}`,
         );
         const nextStatus = response.data.data.status as string;
+        setPostId(response.data.data.postId || null);
         setStatus(nextStatus);
         if (nextStatus === "paid") {
           sessionStorage.removeItem("pendingListingPaymentOrderId");
@@ -56,6 +59,12 @@ function ListingPaymentResult() {
         >
           Quản lý tin đăng
         </Link>
+        {isPaid && postId && (
+          <div className="mt-8 border-t border-gray-200 pt-7 text-left">
+            <h2 className="text-center text-[1.8rem] font-semibold text-gray-900">Giúp tin bán nhanh hơn</h2>
+            <MonetizationOffers postId={postId} status="pending" />
+          </div>
+        )}
       </div>
     </main>
   );

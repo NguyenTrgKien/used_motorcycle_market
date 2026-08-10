@@ -7,12 +7,14 @@ import { ProfessionalSellerProfile } from './entities/professional_seller_profil
 import { ProfessionalSellerController } from './professional_seller.controller';
 import { ProfessionalSellerService } from './professional_seller.service';
 import { AddressModule } from '../address/address.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([ProfessionalSellerProfile, User, Post]),
     CloudinaryModule,
     AddressModule,
+    NotificationModule,
   ],
   controllers: [ProfessionalSellerController],
   providers: [ProfessionalSellerService],

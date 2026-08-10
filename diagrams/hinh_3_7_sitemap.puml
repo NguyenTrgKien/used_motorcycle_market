@@ -1,0 +1,44 @@
+@startwbs
+title Hình 3.7 - Sitemap hệ thống
+* Website mua bán xe cũ
+** Khu vực công khai
+*** Trang chủ
+*** Tìm kiếm xe
+*** Chi tiết tin
+*** Hồ sơ người dùng
+*** Trang cửa hàng
+*** Giới thiệu
+*** Liên hệ
+** Khu vực thành viên
+*** Tin nhắn
+*** Thông báo
+*** Tin đã lưu
+*** Lịch sử xem
+*** Báo cáo của tôi
+*** Lịch sử giao dịch
+** Khu vực người bán
+*** Tạo tin
+*** Chỉnh sửa tin
+*** Quản lý tin
+*** Chọn gói và thanh toán
+*** Đẩy tin
+*** Gói người bán
+** Cài đặt
+*** Hồ sơ
+*** Địa chỉ
+*** Bảo mật và mật khẩu
+*** Xác thực hai yếu tố
+*** Theo dõi đăng nhập
+*** Xác minh danh tính
+*** Người bán chuyên nghiệp
+** Khu vực quản trị
+*** Dashboard
+*** Người dùng và nhân viên
+*** Tin chờ duyệt và toàn bộ tin
+*** Danh mục, hãng, dòng xe
+*** Báo cáo và tin nhắn
+*** Xác minh danh tính
+*** Người bán chuyên nghiệp
+*** Giao dịch và doanh thu
+*** Cấu hình thương mại hóa
+@endwbs

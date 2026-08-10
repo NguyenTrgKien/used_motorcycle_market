@@ -1,0 +1,58 @@
+@startuml
+title Hình E.2 - Activity tạo tin bằng AI và thanh toán
+start
+partition "Người bán" {
+  :Chọn danh mục và tải ảnh;
+  :Yêu cầu AI phân tích;
+}
+partition "Backend + Gemini" {
+  :Kiểm tra tệp và rate limit;
+  :Gửi ảnh và ngữ cảnh cho Gemini;
+  :Trả thuộc tính/mô tả/giá gợi ý;
+}
+partition "Người bán" {
+  :Kiểm tra và chỉnh sửa gợi ý;
+  :Hoàn thiện biểu mẫu;
+  :Yêu cầu xem trước chi phí;
+}
+partition "Backend" {
+  :Tính hạn mức và bảng giá;
+}
+if (Số tiền bằng 0?) then (Có)
+  partition "Backend" {
+    :Tạo tin chờ duyệt;
+  }
+else (Không)
+  partition "Người bán" {
+    :Chọn VNPay, MoMo hoặc chuyển khoản;
+  }
+  partition "Backend" {
+    :Tạo payment order;
+  }
+  if (Thanh toán trực tuyến?) then (Có)
+    partition "Cổng thanh toán" {
+      :Xử lý giao dịch;
+      :Gửi IPN callback;
+    }
+    partition "Backend" {
+      :Xác minh chữ ký, mã đơn, số tiền;
+    }
+  else (Chuyển khoản)
+    partition "Người bán" {
+      :Gửi minh chứng;
+    }
+    partition "Quản trị viên" {
+      :Xác nhận hoặc từ chối;
+    }
+  endif
+  partition "Backend" {
+    if (Đơn thành công?) then (Có)
+      :Kích hoạt quyền một lần;
+      :Tạo tin chờ duyệt;
+    else (Không)
+      :Thông báo thanh toán thất bại/chờ xử lý;
+    endif
+  }
+endif
+stop
+@enduml

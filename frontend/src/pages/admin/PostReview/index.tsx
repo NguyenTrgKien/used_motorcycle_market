@@ -9,14 +9,55 @@ import {
   faLocationDot,
   faShieldHalved,
   faUser,
+  faTrash,
 } from "@fortawesome/free-solid-svg-icons";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import FullscreenLoader from "../../../components/FullscreenLoader";
 import axiosInstance from "../../../configs/axiosInstance";
 import type { ListingPost } from "../../user/Post/post.types";
 import PaymentInformationCard from "./PaymentInformationCard";
+import { useUser } from "../../../hooks/useUser";
+import { ReportStatus, UserRole } from "../../../shared";
+
+interface ReportNavigationState {
+  from?: string;
+  report?: {
+    id: number;
+    reasonType: string;
+    reasonLabel: string;
+    reasonDetail: string;
+    status: string;
+  };
+}
+
+interface AdminPostReport {
+  id: number;
+  reasonType: string;
+  reasonDetail: string;
+  status: string;
+  note?: string;
+  createdAt?: string;
+  reporter?: {
+    fullName?: string;
+    email?: string;
+  };
+}
+
+const reportReasonLabels: Record<string, string> = {
+  fake_info: "Thông tin không trung thực",
+  wrong_price: "Giá đăng không đúng",
+  duplicate_post: "Tin đăng trùng lặp",
+  already_sold: "Xe đã bán",
+  stolen_vehicle: "Nghi ngờ xe gian",
+  fake_images: "Hình ảnh giả",
+  fraud: "Có dấu hiệu lừa đảo",
+  spam: "Spam",
+  abusive: "Ngôn từ xúc phạm",
+  scam: "Giả mạo",
+  other: "Lý do khác",
+};
 
 interface AdminReviewPost extends ListingPost {
   rejectedReason?: string;
@@ -56,6 +97,10 @@ const postStatusLabels: Record<string, string> = {
 function PostReview({ readOnly = false }: PostReviewProps) {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user: currentUser } = useUser();
+  const navigationState = location.state as ReportNavigationState | null;
+  const navigationReport = navigationState?.report;
   const [post, setPost] = useState<AdminReviewPost | null>(null);
   const [selectedImage, setSelectedImage] = useState("");
   const [rejectReason, setRejectReason] = useState("");
@@ -63,6 +108,23 @@ function PostReview({ readOnly = false }: PostReviewProps) {
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isHideModalOpen, setIsHideModalOpen] = useState(false);
+  const [hideReason, setHideReason] = useState("");
+  const [reports, setReports] = useState<AdminPostReport[]>([]);
+  const [isLoadingReports, setIsLoadingReports] = useState(false);
+  const [handlingReport, setHandlingReport] = useState<AdminPostReport | null>(
+    null,
+  );
+  const requestedBackPath = navigationState?.from;
+  const backPath = [
+    "/admin/posts",
+    "/admin/posts/pending",
+    "/admin/reports",
+  ].includes(requestedBackPath || "")
+    ? requestedBackPath!
+    : readOnly
+      ? "/admin/posts"
+      : "/admin/posts/pending";
 
   const images = useMemo(
     () =>
@@ -112,6 +174,54 @@ function PostReview({ readOnly = false }: PostReviewProps) {
     void fetchReviewPost();
   }, [slug]);
 
+  useEffect(() => {
+    if (!post?.id) return;
+    if (navigationReport) {
+      setReports([
+        {
+          ...navigationReport,
+          createdAt: undefined,
+        },
+      ]);
+    }
+    const fetchReports = async () => {
+      try {
+        setIsLoadingReports(true);
+        const response = await axiosInstance.get("/api/v1/report", {
+          params: {
+            targetType: "post",
+            targetId: post.id,
+            limit: 100,
+          },
+        });
+        const items = (response.data.data?.items || []) as AdminPostReport[];
+        setReports(
+          [...items].sort((a, b) => {
+            if (
+              a.status === ReportStatus.PENDING &&
+              b.status !== ReportStatus.PENDING
+            )
+              return -1;
+            if (
+              a.status !== ReportStatus.PENDING &&
+              b.status === ReportStatus.PENDING
+            )
+              return 1;
+            return (
+              new Date(b.createdAt || 0).getTime() -
+              new Date(a.createdAt || 0).getTime()
+            );
+          }),
+        );
+      } catch {
+        if (!navigationReport) setReports([]);
+      } finally {
+        setIsLoadingReports(false);
+      }
+    };
+    void fetchReports();
+  }, [navigationReport, post?.id]);
+
   const handleApprove = async () => {
     if (!post) return;
 
@@ -156,6 +266,33 @@ function PostReview({ readOnly = false }: PostReviewProps) {
     }
   };
 
+  const handleHideReportedPost = async () => {
+    if (!post || !handlingReport) return;
+    const reason = hideReason.trim();
+    if (reason.length < 3) {
+      toast.error("Vui lòng nhập lý do ẩn tin");
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      await axiosInstance.delete(`/api/v1/posts/admin/${post.id}`, {
+        data: { reason },
+      });
+      await axiosInstance.patch(`/api/v1/report/${handlingReport.id}`, {
+        status: ReportStatus.RESOLVED,
+        note: `Đã ẩn tin vi phạm. ${reason}`,
+      });
+      toast.success("Đã ẩn tin và xử lý báo cáo");
+      navigate("/admin/reports");
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.message || "Không thể xử lý tin bị báo cáo",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (isLoading) {
     return <FullscreenLoader />;
   }
@@ -166,8 +303,8 @@ function PostReview({ readOnly = false }: PostReviewProps) {
         <p className="text-gray-500">Không tìm thấy tin chờ kiểm duyệt</p>
         <button
           type="button"
-          onClick={() => navigate("/admin/posts/pending")}
-          className="mt-4 h-12 rounded-lg border border-gray-200 bg-white px-5 text-gray-700"
+          onClick={() => navigate(backPath)}
+          className="mt-4 h-16 rounded-lg border border-gray-200 bg-white px-5 text-gray-700"
         >
           Quay lại danh sách
         </button>
@@ -181,10 +318,8 @@ function PostReview({ readOnly = false }: PostReviewProps) {
         <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <button
             type="button"
-            onClick={() =>
-              navigate(readOnly ? "/admin/transactions" : "/admin/posts/pending")
-            }
-            className="flex h-12 w-fit items-center gap-3 rounded-lg border border-gray-200 bg-white px-5 font-medium text-gray-600 transition-colors hover:bg-gray-50"
+            onClick={() => navigate(backPath)}
+            className="flex h-16 w-fit items-center gap-3 rounded-lg border border-gray-200 bg-white px-5 font-medium text-gray-600 transition-colors hover:bg-gray-50"
           >
             <FontAwesomeIcon icon={faArrowLeft} />
             Quay lại danh sách
@@ -292,36 +427,112 @@ function PostReview({ readOnly = false }: PostReviewProps) {
 
             {post.status === "pending" && (
               <section className="rounded-lg border border-gray-200 bg-white p-6">
-              <h2 className="text-[2rem] font-bold">Ảnh giấy tờ xe</h2>
-              {documentImages.length ? (
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  {documentImages.map((image) => (
-                    <a
-                      key={image.publicId || image.url}
-                      href={image.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block overflow-hidden rounded-lg border border-gray-200 bg-gray-50"
-                    >
-                      <img
-                        src={image.url}
-                        alt="Giấy tờ xe"
-                        className="h-[22rem] w-full object-cover"
-                      />
-                    </a>
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-5 flex items-center gap-3 rounded-lg bg-gray-50 p-5 text-gray-500">
-                  <FontAwesomeIcon icon={faFileLines} />
-                  Người bán chưa tải ảnh giấy tờ xe.
-                </div>
-              )}
+                <h2 className="text-[2rem] font-bold">Ảnh giấy tờ xe</h2>
+                {documentImages.length ? (
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    {documentImages.map((image) => (
+                      <a
+                        key={image.publicId || image.url}
+                        href={image.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block overflow-hidden rounded-lg border border-gray-200 bg-gray-50"
+                      >
+                        <img
+                          src={image.url}
+                          alt="Giấy tờ xe"
+                          className="h-[22rem] w-full object-cover"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-5 flex items-center gap-3 rounded-lg bg-gray-50 p-5 text-gray-500">
+                    <FontAwesomeIcon icon={faFileLines} />
+                    Người bán chưa tải ảnh giấy tờ xe.
+                  </div>
+                )}
               </section>
             )}
           </div>
 
           <aside className="space-y-6">
+            {(isLoadingReports || reports.length > 0) && (
+              <section className="rounded-lg border border-red-200 bg-white p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-[2rem] font-bold text-gray-900">
+                    Báo cáo vi phạm
+                  </h2>
+                  <span className="rounded-full px-3 py-1 text-[1.4rem] text-red-700">
+                    {reports.length} báo cáo
+                  </span>
+                </div>
+                {isLoadingReports ? (
+                  <div className="mt-4 h-24 animate-pulse rounded-lg bg-gray-100" />
+                ) : (
+                  <div className="mt-4 max-h-[42rem] space-y-3 overflow-y-auto pr-1">
+                    {reports.map((report) => (
+                      <div
+                        key={report.id}
+                        className="rounded-lg border border-gray-200 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="font-medium text-red-700">
+                            {reportReasonLabels[report.reasonType] ||
+                              report.reasonType}
+                          </p>
+                          <span
+                            className={`shrink-0 rounded-full px-5 py-3 text-[1.2rem] font-medium ${report.status === ReportStatus.PENDING ? "bg-amber-100 text-amber-700" : report.status === ReportStatus.RESOLVED ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}
+                          >
+                            {report.status === ReportStatus.PENDING
+                              ? "Chờ xử lý"
+                              : report.status === ReportStatus.RESOLVED
+                                ? "Đã xử lý"
+                                : "Đã từ chối"}
+                          </span>
+                        </div>
+                        <p className="mt-2 whitespace-pre-line text-[1.4rem] leading-6 text-gray-600">
+                          {report.reasonDetail}
+                        </p>
+                        {(report.reporter?.fullName ||
+                          report.reporter?.email ||
+                          report.createdAt) && (
+                          <div className="mt-3 text-[1.2rem] text-gray-400">
+                            {[
+                              report.reporter?.fullName ||
+                                report.reporter?.email,
+                              report.createdAt
+                                ? new Date(report.createdAt).toLocaleString(
+                                    "vi-VN",
+                                  )
+                                : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
+                        )}
+                        {currentUser?.role === UserRole.ADMIN &&
+                          report.status === ReportStatus.PENDING &&
+                          post.status !== "hidden" && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setHandlingReport(report);
+                                setHideReason(report.reasonDetail);
+                                setIsHideModalOpen(true);
+                              }}
+                              className="mt-3 flex h-16 w-full items-center justify-center gap-2 rounded-lg bg-red-600 font-semibold text-white hover:bg-red-700"
+                            >
+                              <FontAwesomeIcon icon={faTrash} />
+                              Ẩn tin và xử lý báo cáo này
+                            </button>
+                          )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
             <section className="rounded-lg border border-gray-200 bg-white p-6">
               <h2 className="text-[2rem] font-bold">Người đăng tin</h2>
               <div className="mt-5 flex items-center gap-4">
@@ -354,37 +565,90 @@ function PostReview({ readOnly = false }: PostReviewProps) {
                   }
                 />
               </div>
+              {post.user?.id && (
+                <Link
+                  to={`/admin/users/${post.user.id}`}
+                  className="mt-5 flex h-16 items-center justify-center gap-2 rounded-lg border border-gray-300 font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <FontAwesomeIcon icon={faUser} />
+                  Xem người đăng
+                </Link>
+              )}
             </section>
 
-            <section className="rounded-lg border border-gray-200 bg-white p-6">
-              <h2 className="text-[2rem] font-bold">Quyết định kiểm duyệt</h2>
-              <div className="mt-5 rounded-lg bg-emerald-50 p-4 text-[1.4rem] text-emerald-700">
-                <FontAwesomeIcon icon={faShieldHalved} className="mr-2" />
-                Chỉ duyệt khi hình ảnh, giấy tờ và mô tả phù hợp với tin đăng.
-              </div>
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => setIsApproveModalOpen(true)}
-                className="mt-5 flex h-18 w-full items-center justify-center gap-3 rounded-lg bg-emerald-600 font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <FontAwesomeIcon icon={faCheck} />
-                Duyệt tin
-              </button>
+            {!readOnly && post.status === "pending" && (
+              <section className="rounded-lg border border-gray-200 bg-white p-6">
+                <h2 className="text-[2rem] font-bold">Quyết định kiểm duyệt</h2>
+                <div className="mt-5 rounded-lg bg-emerald-50 p-4 text-[1.4rem] text-emerald-700">
+                  <FontAwesomeIcon icon={faShieldHalved} className="mr-2" />
+                  Chỉ duyệt khi hình ảnh, giấy tờ và mô tả phù hợp với tin đăng.
+                </div>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => setIsApproveModalOpen(true)}
+                  className="mt-5 flex h-18 w-full items-center justify-center gap-3 rounded-lg bg-emerald-600 font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <FontAwesomeIcon icon={faCheck} />
+                  Duyệt tin
+                </button>
 
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => setIsRejectModalOpen(true)}
-                className="mt-3 flex h-18 w-full items-center justify-center gap-3 rounded-lg border border-red-200 font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <FontAwesomeIcon icon={faBan} />
-                Từ chối tin
-              </button>
-            </section>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => setIsRejectModalOpen(true)}
+                  className="mt-3 flex h-18 w-full items-center justify-center gap-3 rounded-lg border border-red-200 font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <FontAwesomeIcon icon={faBan} />
+                  Từ chối tin
+                </button>
+              </section>
+            )}
           </aside>
         </div>
       </section>
+
+      {isHideModalOpen && handlingReport && (
+        <div className="fixed inset-0 z-999 flex items-center justify-center bg-black/40 px-5">
+          <div className="w-full max-w-[48rem] rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="text-[2rem] font-semibold text-gray-900">
+              Ẩn tin vi phạm
+            </h2>
+            <p className="mt-2 text-[1.4rem] text-gray-500">
+              Tin sẽ bị ẩn khỏi giao diện công khai và báo cáo được chuyển sang
+              đã xử lý.
+            </p>
+            <label className="mt-5 block font-medium text-gray-700">
+              Lý do xử lý
+            </label>
+            <textarea
+              value={hideReason}
+              onChange={(event) => setHideReason(event.target.value)}
+              rows={5}
+              maxLength={1000}
+              className="mt-2 w-full resize-none rounded-lg border border-gray-300 p-4 outline-none focus:border-red-500"
+            />
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsHideModalOpen(false)}
+                disabled={isSubmitting}
+                className="h-16 rounded-lg border border-gray-300 px-5 font-medium text-gray-700"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleHideReportedPost()}
+                disabled={isSubmitting}
+                className="h-16 rounded-lg bg-red-600 px-5 font-medium text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {isSubmitting ? "Đang xử lý..." : "Ẩn tin và xử lý báo cáo"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {post.status === "pending" && isApproveModalOpen && (
         <div className="fixed inset-0 z-999 flex items-center justify-center bg-black/40 px-5">

@@ -15,6 +15,9 @@ import { Report } from '../report/entities/report.entity';
 import { NotificationModule } from '../notification/notification.module';
 import { User } from '../user/entities/user.entity';
 import { ListingPaymentModule } from '../listing_payment/listing-payment.module';
+import { ConfigService } from '@nestjs/config';
+import Redis from 'ioredis';
+import { POST_VIEW_REDIS } from './post.constants';
 
 @Module({
   imports: [
@@ -35,7 +38,29 @@ import { ListingPaymentModule } from '../listing_payment/listing-payment.module'
     ListingPaymentModule,
   ],
   controllers: [PostController],
-  providers: [PostService],
+  providers: [
+    PostService,
+    {
+      provide: POST_VIEW_REDIS,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const redis = new Redis(
+          config.get<string>('REDIS_URL') || 'redis://localhost:6379',
+          {
+            lazyConnect: true,
+            enableOfflineQueue: false,
+            maxRetriesPerRequest: 1,
+            connectTimeout: 500,
+          },
+        );
+
+        redis.on('error', () => undefined);
+        redis.connect().catch(() => undefined);
+
+        return redis;
+      },
+    },
+  ],
   exports: [PostService],
 })
 export class PostModule {}

@@ -8,6 +8,7 @@
   faLocationDot,
   faPenToSquare,
   faPhone,
+  faFlag,
   faShieldHalved,
   faStar,
 } from "@fortawesome/free-solid-svg-icons";
@@ -22,6 +23,8 @@ import useAuthModal from "../../../hooks/useAuthModal";
 import { useUser } from "../../../hooks/useUser";
 import PostCard from "../HomePage/components/PostCard";
 import type { ListingPost } from "./post.types";
+import ReportModal from "../../../components/ReportModal";
+import { TargetType } from "../../../shared";
 
 function PostDetail() {
   const { slug } = useParams();
@@ -35,6 +38,8 @@ function PostDetail() {
   const [selectedImage, setSelectedImage] = useState("");
   const [similarPosts, setSimilarPosts] = useState<ListingPost[]>([]);
   const [isLoadingSimilarPosts, setIsLoadingSimilarPosts] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isReported, setIsReported] = useState(false);
   const images = useMemo(
     () =>
       [...(post?.post_images || [])].sort((a, b) => a.sortOrder - b.sortOrder),
@@ -79,6 +84,19 @@ function PostDetail() {
   const selectedImageIndex = images.findIndex(
     (image) => image.imageUrl === selectedImage,
   );
+
+  useEffect(() => {
+    if (!user?.id || !post?.id || isOwner) {
+      setIsReported(false);
+      return;
+    }
+    void axiosInstance
+      .get("/api/v1/report/status", {
+        params: { targetType: TargetType.POST, targetId: post.id },
+      })
+      .then((response) => setIsReported(Boolean(response.data.data?.reported)))
+      .catch(() => setIsReported(false));
+  }, [isOwner, post?.id, user?.id]);
 
   const handleChangeImage = (direction: "prev" | "next") => {
     if (images.length <= 1) return;
@@ -132,13 +150,11 @@ function PostDetail() {
       setIsSaved(nextSaved);
 
       if (nextSaved) {
-        const res = await axiosInstance.post("/api/v1/saved-post", {
+        await axiosInstance.post("/api/v1/saved-post", {
           postId: post.id,
         });
-        toast.success(res.data.message || "Đã thêm tin vào yêu thích");
       } else {
-        const res = await axiosInstance.delete(`/api/v1/saved-post/${post.id}`);
-        toast.success(res.data.message || "Đã bỏ tin khỏi yêu thích");
+        await axiosInstance.delete(`/api/v1/saved-post/${post.id}`);
       }
     } catch (error: any) {
       setIsSaved(!nextSaved);
@@ -192,6 +208,28 @@ function PostDetail() {
 
     if (slug) void fetchPost();
   }, [slug, user?.id]);
+
+  useEffect(() => {
+    if (!post?.id) return;
+
+    const timeoutId = window.setTimeout(() => {
+      void axiosInstance
+        .post<{
+          data: { recorded: boolean; viewCount: number };
+        }>(`/api/v1/posts/${post.id}/view`)
+        .then((res) => {
+          if (!res.data.data.recorded) return;
+          setPost((current) =>
+            current
+              ? { ...current, viewCount: res.data.data.viewCount }
+              : current,
+          );
+        })
+        .catch(() => undefined);
+    }, 5000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [post?.id]);
 
   useEffect(() => {
     const fetchSimilarPosts = async () => {
@@ -372,10 +410,10 @@ function PostDetail() {
                 type="button"
                 onClick={handleToggleSaved}
                 disabled={isSaving}
-                className={`mt-5 flex h-14 w-full items-center justify-center gap-3 rounded-xl border font-medium transition-colors ${
+                className={`mt-5 flex h-16 w-full items-center justify-center gap-3 rounded-xl border font-medium transition-colors ${
                   isSaved
                     ? "border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
-                    : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                    : "border-gray-400 bg-white text-gray-600 hover:bg-gray-50"
                 } disabled:cursor-not-allowed disabled:opacity-70`}
               >
                 <FontAwesomeIcon
@@ -385,10 +423,24 @@ function PostDetail() {
               </button>
             )}
 
+            {!isOwner && (
+              <button
+                type="button"
+                onClick={() =>
+                  user?.id ? setIsReportOpen(true) : openAuthModal()
+                }
+                disabled={isReported}
+                className="mt-3 flex h-16 w-full items-center justify-center gap-2 rounded-xl border border-gray-400 text-[1.4rem] font-medium text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
+              >
+                <FontAwesomeIcon icon={faFlag} />
+                {isReported ? "Đã báo cáo - đang chờ xử lý" : "Báo cáo tin đăng"}
+              </button>
+            )}
+
             {isOwner && (
               <Link
                 to={`/posts/${post.slug}/edit`}
-                className="mt-5 flex h-14 items-center justify-center gap-3 rounded-xl border border-amber-300 bg-amber-50 font-medium text-amber-700 transition-colors hover:bg-amber-100"
+                className="mt-5 flex h-16 items-center justify-center gap-3 rounded-xl border border-amber-300 bg-amber-50 font-medium text-amber-700 transition-colors hover:bg-amber-100"
               >
                 <FontAwesomeIcon icon={faPenToSquare} />
                 Sửa tin
@@ -493,7 +545,6 @@ function PostDetail() {
           </section>
         </aside>
       </div>
-
       {(isLoadingSimilarPosts || similarPosts.length > 0) && (
         <section className="mt-8 rounded-xl border border-gray-200 bg-white p-6">
           <div className="mb-5">
@@ -530,6 +581,14 @@ function PostDetail() {
           )}
         </section>
       )}
+      <ReportModal
+        isOpen={isReportOpen}
+        targetId={post.id}
+        targetType={TargetType.POST}
+        targetName={post.title}
+        onClose={() => setIsReportOpen(false)}
+        onSubmitted={() => setIsReported(true)}
+      />
     </div>
   );
 }

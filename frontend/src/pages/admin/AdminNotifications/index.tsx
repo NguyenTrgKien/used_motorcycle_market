@@ -2,7 +2,6 @@ import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBell,
-  faCheckDouble,
   faCommentDots,
   faFileCircleCheck,
   faInbox,
@@ -81,6 +80,31 @@ const notificationMeta: Record<
     className: "bg-emerald-100 text-emerald-700",
     fallbackPath: "/posts/manage",
   },
+  [NotificationType.IDENTITY_STATUS_UPDATED]: {
+    icon: faFileCircleCheck,
+    className: "bg-blue-100 text-blue-700",
+    fallbackPath: "/admin/identity-verifications",
+  },
+  [NotificationType.NEW_IDENTITY_APPLICATION]: {
+    icon: faFileCircleCheck,
+    className: "bg-amber-100 text-amber-700",
+    fallbackPath: "/admin/identity-verifications",
+  },
+  [NotificationType.NEW_PROFESSIONAL_SELLER_APPLICATION]: {
+    icon: faBell,
+    className: "bg-purple-100 text-purple-700",
+    fallbackPath: "/admin/professional-sellers",
+  },
+  [NotificationType.NEW_REPORT]: {
+    icon: faBell,
+    className: "bg-red-100 text-red-700",
+    fallbackPath: "/admin/reports",
+  },
+  [NotificationType.REPORT_STATUS_UPDATED]: {
+    icon: faFileCircleCheck,
+    className: "bg-blue-100 text-blue-700",
+    fallbackPath: "/notifications",
+  },
 };
 
 function formatDate(value: string) {
@@ -123,13 +147,7 @@ function AdminNotifications() {
   );
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [isMarkingAll, setIsMarkingAll] = useState(false);
   const [filter, setFilter] = useState<NotificationFilter>("all");
-
-  const hasUnread = useMemo(
-    () => notifications.some((notification) => !notification.isRead),
-    [notifications],
-  );
 
   const filteredNotifications = useMemo(() => {
     if (filter === "unread") {
@@ -225,25 +243,6 @@ function AdminNotifications() {
     });
   };
 
-  const handleMarkAllRead = async () => {
-    if (!hasUnread) return;
-
-    try {
-      setIsMarkingAll(true);
-      await axiosInstance.patch("/api/v1/notifications/read-all");
-      setNotifications((prev) =>
-        prev.map((notification) => ({ ...notification, isRead: true })),
-      );
-      setUnreadCount(0);
-    } catch (error: any) {
-      toast.error(
-        error?.response?.data?.message || "Không thể đánh dấu thông báo",
-      );
-    } finally {
-      setIsMarkingAll(false);
-    }
-  };
-
   return (
     <div className="px-5 py-6 md:px-8">
       <div className="mx-auto max-w-[125rem]">
@@ -256,15 +255,6 @@ function AdminNotifications() {
               Bạn có {unreadCount} thông báo chưa đọc
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleMarkAllRead}
-            disabled={!hasUnread || isMarkingAll}
-            className="flex h-14 w-fit items-center gap-3 rounded-lg bg-gray-900 px-5 text-[1.4rem] font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"
-          >
-            <FontAwesomeIcon icon={faCheckDouble} />
-            {isMarkingAll ? "Dang cap nhat..." : "Danh dau da doc"}
-          </button>
         </div>
 
         <div className="mb-5 flex rounded-lg border border-gray-200 bg-white p-1">
@@ -320,10 +310,10 @@ function AdminNotifications() {
                   key={notification.id}
                   type="button"
                   onClick={() => void handleOpenNotification(notification)}
-                  className={`flex w-full gap-4 rounded-lg border p-5 text-left transition-colors hover:border-orange-200 hover:bg-orange-50 ${
+                  className={`flex w-full gap-4 rounded-lg border p-5 text-left transition-colors hover:cursor-pointer ${
                     notification.isRead
                       ? "border-gray-200 bg-white"
-                      : "border-orange-200 bg-orange-50/60"
+                      : "border-amber-200 bg-amber-50/60"
                   }`}
                 >
                   <span

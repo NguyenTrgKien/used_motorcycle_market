@@ -42,23 +42,23 @@ export class UserIdentity {
   @Column()
   address: string;
 
-  @Column()
-  idFrontUrl: string;
+  @Column({ type: 'varchar', nullable: true, select: false })
+  idFrontUrl?: string | null;
 
-  @Column()
-  idBackUrl: string;
+  @Column({ type: 'varchar', nullable: true, select: false })
+  idBackUrl?: string | null;
 
-  @Column()
-  selfieUrl: string;
+  @Column({ type: 'varchar', nullable: true, select: false })
+  selfieUrl?: string | null;
 
-  @Column({ nullable: true, select: false })
-  idFrontPublicId?: string;
+  @Column({ type: 'varchar', nullable: true, select: false })
+  idFrontPublicId?: string | null;
 
-  @Column({ nullable: true, select: false })
-  idBackPublicId?: string;
+  @Column({ type: 'varchar', nullable: true, select: false })
+  idBackPublicId?: string | null;
 
-  @Column({ nullable: true, select: false })
-  selfiePublicId?: string;
+  @Column({ type: 'varchar', nullable: true, select: false })
+  selfiePublicId?: string | null;
 
   @Index()
   @Column({

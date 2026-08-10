@@ -6,11 +6,14 @@ import BankTransferQrModal, {
 } from "./BankTransferQrModal";
 
 interface ListingPaymentModalProps {
-  postId: number;
+  postId?: number;
   amount: number;
   onClose: () => void;
   onPaymentSubmitted?: () => void;
   initialMethod?: "vnpay" | "momo" | "bank_transfer";
+  orderType?: "listing" | "featured" | "vip" | "boost" | "subscription";
+  pricingPlanId?: number;
+  subscriptionPlanId?: number;
 }
 
 const methods = [
@@ -25,6 +28,9 @@ function ListingPaymentModal({
   onClose,
   onPaymentSubmitted,
   initialMethod = "vnpay",
+  orderType = "listing",
+  pricingPlanId,
+  subscriptionPlanId,
 }: ListingPaymentModalProps) {
   const [method, setMethod] = useState(initialMethod);
   const [isCreating, setIsCreating] = useState(false);
@@ -38,7 +44,10 @@ function ListingPaymentModal({
       const response = await axiosInstance.post(
         "/api/v1/listing-payments/orders",
         {
-          postId,
+          ...(postId ? { postId } : {}),
+          orderType,
+          ...(pricingPlanId ? { pricingPlanId } : {}),
+          ...(subscriptionPlanId ? { subscriptionPlanId } : {}),
           method,
         },
       );

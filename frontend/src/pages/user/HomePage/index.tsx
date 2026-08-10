@@ -144,6 +144,14 @@ function HomePage() {
           hasError={hasCategoriesError}
           onRetry={() => void fetchCategories()}
         />
+        <RecommendationSection
+          posts={filteredPosts}
+          isLoading={isLoadingPosts}
+          hasError={hasPostsError}
+          hasFilters={hasFilters}
+          onReset={handleResetFilters}
+          onRetry={() => void fetchPosts()}
+        />
         {isLoadingBrands ? (
           <BrandSectionSkeleton />
         ) : hasBrandsError ? (
@@ -160,14 +168,7 @@ function HomePage() {
             onSelect={handleSelectBrand}
           />
         )}
-        <RecommendationSection
-          posts={filteredPosts}
-          isLoading={isLoadingPosts}
-          hasError={hasPostsError}
-          hasFilters={hasFilters}
-          onReset={handleResetFilters}
-          onRetry={() => void fetchPosts()}
-        />
+
         {hasPostsError ? null : isLoadingPosts ? (
           <PostSectionSkeleton count={4} />
         ) : (

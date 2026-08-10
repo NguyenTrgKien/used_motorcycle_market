@@ -19,6 +19,7 @@ import type { RequestWithUser } from '../auth/auth.controller';
 import { CreateProfessionalSellerDto } from './dto/create-professional-seller.dto';
 import { ReviewProfessionalSellerDto } from './dto/review-professional-seller.dto';
 import { UpdateProfessionalSellerDto } from './dto/update-professional-seller.dto';
+import { RequestLegalChangeDto } from './dto/request-legal-change.dto';
 import { ProfessionalSellerService } from './professional_seller.service';
 
 @Controller('professional-sellers')
@@ -71,6 +72,15 @@ export class ProfessionalSellerController {
     },
   ) {
     return this.service.updateMine(req.user.id, data, files || {});
+  }
+
+  @Roles(UserRole.USER)
+  @Post('me/legal-change-request')
+  requestLegalChange(
+    @Req() req: RequestWithUser,
+    @Body() data: RequestLegalChangeDto,
+  ) {
+    return this.service.requestLegalChange(req.user.id, data.reason);
   }
 
   @Roles(UserRole.ADMIN)

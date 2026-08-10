@@ -7,4 +7,9 @@ export enum NotificationType {
   BANK_TRANSFER_SUBMITTED = "bank_transfer_submitted",
   BANK_TRANSFER_REJECTED = "bank_transfer_rejected",
   BANK_TRANSFER_CONFIRMED = "bank_transfer_confirmed",
+  IDENTITY_STATUS_UPDATED = "identity_status_updated",
+  NEW_IDENTITY_APPLICATION = "new_identity_application",
+  NEW_PROFESSIONAL_SELLER_APPLICATION = "new_professional_seller_application",
+  NEW_REPORT = "new_report",
+  REPORT_STATUS_UPDATED = "report_status_updated",
 }

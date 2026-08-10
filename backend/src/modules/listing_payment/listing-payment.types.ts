@@ -20,6 +20,21 @@ export enum ListingPaymentStatus {
   FAILED = 'failed',
   CANCELLED = 'cancelled',
   REJECTED = 'rejected',
+  EXPIRED = 'expired',
+}
+
+export enum MonetizationProductType {
+  LISTING = 'listing',
+  FEATURED = 'featured',
+  VIP = 'vip',
+  BOOST = 'boost',
+  SUBSCRIPTION = 'subscription',
+}
+
+export enum SellerAudience {
+  ALL = 'all',
+  INDIVIDUAL = 'individual',
+  PROFESSIONAL = 'professional',
 }
 
 export const LISTING_FEE = 30000;

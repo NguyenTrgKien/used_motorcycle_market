@@ -242,13 +242,13 @@ function LoginAndRegisterModal({ onClose }: LoginAndRegisterModalProp) {
   };
 
   return (
-    <div className="fixed inset-0 w-full h-full flex items-center justify-center bg-[#38383873]">
+    <div className="fixed inset-0 w-full h-full flex items-center justify-center bg-[#3838389c] z-[9999]">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2 }}
         exit={{ opacity: 0, y: 20 }}
-        className="relative w-[90%] md:w-[50rem] lg:w-[80rem] h-[50rem] lg:h-[60rem] flex bg-white shadow-xl rounded-xl"
+        className="relative w-[90%] md:w-[50rem] lg:w-[80rem] h-[50rem] lg:h-[60rem] flex bg-white shadow-2xl rounded-xl"
       >
         <button
           className="absolute top-4 right-4 w-12 h-12 rounded-sm flex items-center justify-center bg-gray-100 hover:bg-gray-200 transition-colors duration-300 text-gray-500 hover:cursor-pointer"

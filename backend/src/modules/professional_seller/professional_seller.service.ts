@@ -9,6 +9,8 @@ import {
   SellerType,
   PostStatus,
   IdentityStatus,
+  NotificationType,
+  UserRole,
 } from 'src/shared';
 import { DataSource, Repository } from 'typeorm';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
@@ -18,6 +20,7 @@ import { CreateProfessionalSellerDto } from './dto/create-professional-seller.dt
 import { UpdateProfessionalSellerDto } from './dto/update-professional-seller.dto';
 import { ProfessionalSellerProfile } from './entities/professional_seller_profile.entity';
 import { AddressService } from '../address/address.service';
+import { NotificationService } from '../notification/notification.service';
 
 interface ProfessionalSellerFiles {
   businessLicense?: Express.Multer.File[];
@@ -37,6 +40,7 @@ export class ProfessionalSellerService {
     private readonly cloudinaryService: CloudinaryService,
     private readonly dataSource: DataSource,
     private readonly addressService: AddressService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   private getFile(
@@ -161,6 +165,7 @@ export class ProfessionalSellerService {
           : {}),
       });
       await this.profileRepo.save(existing);
+      await this.notifyAdminsAboutApplication(existing, true);
       if (oldPublicIds.length) {
         await this.cloudinaryService.deleteFiles(oldPublicIds);
       }
@@ -183,11 +188,35 @@ export class ProfessionalSellerService {
       userId,
     });
     await this.profileRepo.save(profile);
+    await this.notifyAdminsAboutApplication(profile, false);
 
     return {
       message: 'Đã gửi hồ sơ người bán chuyên, vui lòng chờ xét duyệt',
       data: profile,
     };
+  }
+
+  private async notifyAdminsAboutApplication(
+    profile: ProfessionalSellerProfile,
+    isResubmission: boolean,
+  ) {
+    const admins = await this.userRepo.find({
+      where: { role: UserRole.ADMIN },
+      select: { id: true },
+    });
+    await Promise.all(
+      admins.map((admin) =>
+        this.notificationService.createNotification({
+          userId: admin.id,
+          title: isResubmission
+            ? 'Hồ sơ người bán chuyên được gửi lại'
+            : 'Có hồ sơ người bán chuyên mới',
+          content: `Cửa hàng ${profile.storeName} ${isResubmission ? 'vừa gửi lại' : 'vừa gửi'} hồ sơ đăng ký người bán chuyên.`,
+          type: NotificationType.NEW_PROFESSIONAL_SELLER_APPLICATION,
+          referenceId: profile.id,
+        }),
+      ),
+    );
   }
 
   async getMine(userId: number) {
@@ -210,6 +239,16 @@ export class ProfessionalSellerService {
       );
     }
 
+    if (
+      !this.addressService.isValidAddress(
+        data.province,
+        data.district,
+        data.ward,
+      )
+    ) {
+      throw new BadRequestException('Địa chỉ cửa hàng không hợp lệ');
+    }
+
     const logo = this.getFile(files, 'logo');
     const cover = this.getFile(files, 'cover');
     this.validateImage(logo);
@@ -226,6 +265,9 @@ export class ProfessionalSellerService {
 
     Object.assign(profile, {
       ...data,
+      description: data.description || undefined,
+      ward: data.ward || undefined,
+      website: data.website || undefined,
       ...(logoUpload
         ? { logoUrl: logoUpload.url, logoPublicId: logoUpload.publicId }
         : {}),
@@ -242,6 +284,33 @@ export class ProfessionalSellerService {
       message: 'Đã cập nhật thông tin cửa hàng',
       data: profile,
     };
+  }
+
+  async requestLegalChange(userId: number, reason: string) {
+    const profile = await this.profileRepo.findOne({ where: { userId } });
+    if (!profile || profile.status !== ProfessionalSellerStatus.APPROVED) {
+      throw new BadRequestException(
+        'Chỉ cửa hàng đã xác minh mới có thể yêu cầu thay đổi pháp lý',
+      );
+    }
+
+    const admins = await this.userRepo.find({
+      where: { role: UserRole.ADMIN },
+      select: { id: true },
+    });
+    await Promise.all(
+      admins.map((admin) =>
+        this.notificationService.createNotification({
+          userId: admin.id,
+          title: 'Yêu cầu thay đổi thông tin pháp lý',
+          content: `Cửa hàng ${profile.storeName} yêu cầu thay đổi thông tin pháp lý: ${reason.trim()}`,
+          type: NotificationType.NEW_PROFESSIONAL_SELLER_APPLICATION,
+          referenceId: profile.id,
+        }),
+      ),
+    );
+
+    return { message: 'Đã gửi yêu cầu thay đổi thông tin pháp lý' };
   }
 
   async getPublic(id: number) {

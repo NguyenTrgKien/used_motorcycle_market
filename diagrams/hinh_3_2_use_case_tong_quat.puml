@@ -1,0 +1,46 @@
+@startuml
+title Hình 3.2 - Use Case tổng quát
+left to right direction
+actor "Khách" as Guest
+actor "Thành viên" as Member
+actor "Người bán" as Seller
+actor "CSKH" as Support
+actor "Quản trị viên" as Admin
+Member --|> Guest
+Seller --|> Member
+rectangle "Website mua bán xe cũ" {
+  usecase "Xem và tìm kiếm tin" as UC1
+  usecase "Đăng ký/Đăng nhập" as UC2
+  usecase "Quản lý hồ sơ và bảo mật" as UC3
+  usecase "Lưu tin và lịch sử xem" as UC4
+  usecase "Nhắn tin và nhận thông báo" as UC5
+  usecase "Đánh giá và báo cáo" as UC6
+  usecase "Đăng và quản lý tin" as UC7
+  usecase "Thanh toán và đẩy tin" as UC8
+  usecase "Đăng ký người bán chuyên nghiệp" as UC9
+  usecase "Duyệt tin" as UC10
+  usecase "Xử lý báo cáo" as UC11
+  usecase "Duyệt xác minh" as UC12
+  usecase "Quản lý người dùng và danh mục" as UC13
+  usecase "Quản lý giao dịch và doanh thu" as UC14
+  usecase "Xem dashboard" as UC15
+}
+Guest --> UC1
+Guest --> UC2
+Member --> UC3
+Member --> UC4
+Member --> UC5
+Member --> UC6
+Seller --> UC7
+Seller --> UC8
+Seller --> UC9
+Support --> UC10
+Support --> UC11
+Support --> UC12
+Admin --> UC10
+Admin --> UC11
+Admin --> UC12
+Admin --> UC13
+Admin --> UC14
+Admin --> UC15
+@enduml

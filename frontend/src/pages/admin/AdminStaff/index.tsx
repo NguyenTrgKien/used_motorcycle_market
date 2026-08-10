@@ -1,6 +1,7 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faMagnifyingGlass,
+  faPen,
   faRotateRight,
   faUsers,
 } from "@fortawesome/free-solid-svg-icons";
@@ -103,6 +104,7 @@ function AdminStaff() {
   const [createRole, setCreateRole] = useState<UserRole>(UserRole.MODERATOR);
   const [assignUserId, setAssignUserId] = useState("");
   const [assignRole, setAssignRole] = useState<UserRole>(UserRole.MODERATOR);
+  const [editingStaff, setEditingStaff] = useState<StaffUser | null>(null);
   const limit = 10;
 
   const totalPages = useMemo(
@@ -187,37 +189,76 @@ function AdminStaff() {
     const password = createPassword.trim();
     const phone = createPhone.trim();
 
-    if (!fullName || !email || !password) {
-      toast.error("Vui lòng nhập đầy đủ họ tên, email và mật khẩu");
+    if (!fullName || !email || (!editingStaff && !password)) {
+      toast.error(
+        editingStaff
+          ? "Vui lòng nhập đầy đủ họ tên và email"
+          : "Vui lòng nhập đầy đủ họ tên, email và mật khẩu",
+      );
       return;
     }
 
-    if (password.length < 6) {
+    if (!editingStaff && password.length < 6) {
       toast.error("Mật khẩu tạm thời phải có ít nhất 6 ký tự");
       return;
     }
 
     try {
       setIsCreating(true);
-      const res = await axiosInstance.post("/api/v1/users/admin/staff", {
-        fullName,
-        email,
-        password,
-        role: createRole,
-        phone: phone || undefined,
-      });
-      toast.success(res.data.message || "Đã tạo nhân viên mới");
+      const res = editingStaff
+        ? await axiosInstance.patch(
+            `/api/v1/users/admin/staff/${editingStaff.id}`,
+            { fullName, email, phone: phone || undefined },
+          )
+        : await axiosInstance.post("/api/v1/users/admin/staff", {
+            fullName,
+            email,
+            password,
+            role: createRole,
+            phone: phone || undefined,
+          });
+      toast.success(
+        res.data.message ||
+          (editingStaff
+            ? "Đã cập nhật thông tin nhân viên"
+            : "Đã tạo nhân viên mới"),
+      );
+      setCreateFullName("");
       setCreateEmail("");
       setCreatePhone("");
       setCreatePassword("");
       setCreateRole(UserRole.MODERATOR);
+      setEditingStaff(null);
       setPage(1);
       await fetchStaff();
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "Không thể tạo nhân viên");
+      toast.error(
+        error?.response?.data?.message ||
+          (editingStaff
+            ? "Không thể cập nhật thông tin nhân viên"
+            : "Không thể tạo nhân viên"),
+      );
     } finally {
       setIsCreating(false);
     }
+  };
+
+  const openEditStaff = (item: StaffUser) => {
+    setEditingStaff(item);
+    setCreateFullName(item.fullName || "");
+    setCreateEmail(item.email);
+    setCreatePhone(item.phone || "");
+    setCreatePassword("");
+    setCreateRole(item.role);
+  };
+
+  const cancelEditStaff = () => {
+    setEditingStaff(null);
+    setCreateFullName("");
+    setCreateEmail("");
+    setCreatePhone("");
+    setCreatePassword("");
+    setCreateRole(UserRole.MODERATOR);
   };
 
   return (
@@ -353,28 +394,39 @@ function AdminStaff() {
                           {item.status}
                         </span>
 
-                        <select
-                          value={item.role}
-                          disabled={
-                            item.role === UserRole.ADMIN ||
-                            updatingId === item.id
-                          }
-                          onChange={(e) =>
-                            void updateRole(item.id, e.target.value as UserRole)
-                          }
-                          className="h-12 rounded-lg border border-gray-300 bg-white px-3 outline-none transition-colors focus:border-amber-400 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
-                        >
-                          {item.role === UserRole.ADMIN && (
-                            <option value={UserRole.ADMIN}>
-                              Quản trị viên
-                            </option>
-                          )}
-                          {editableRoles.map((itemRole) => (
-                            <option key={itemRole} value={itemRole}>
-                              {roleLabels[itemRole]}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={item.role}
+                            disabled={
+                              item.role === UserRole.ADMIN ||
+                              updatingId === item.id
+                            }
+                            onChange={(e) =>
+                              void updateRole(item.id, e.target.value as UserRole)
+                            }
+                            className="h-12 min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 outline-none transition-colors focus:border-amber-400 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                          >
+                            {item.role === UserRole.ADMIN && (
+                              <option value={UserRole.ADMIN}>
+                                Quản trị viên
+                              </option>
+                            )}
+                            {editableRoles.map((itemRole) => (
+                              <option key={itemRole} value={itemRole}>
+                                {roleLabels[itemRole]}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => openEditStaff(item)}
+                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 transition-colors hover:border-amber-400 hover:text-amber-700"
+                            aria-label="Sửa thông tin nhân viên"
+                            title="Sửa thông tin"
+                          >
+                            <FontAwesomeIcon icon={faPen} />
+                          </button>
+                        </div>
                       </article>
                     ))}
                   </div>
@@ -413,9 +465,30 @@ function AdminStaff() {
                 onSubmit={handleCreateStaff}
                 className="h-fit rounded-lg border border-gray-300 bg-gray-50 p-5"
               >
-                <h2 className="text-[1.8rem] font-semibold">
-                  Thêm nhân viên mới
-                </h2>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-[1.8rem] font-semibold">
+                      {editingStaff
+                        ? "Cập nhật nhân viên"
+                        : "Thêm nhân viên mới"}
+                    </h2>
+                    {editingStaff && (
+                      <p className="mt-1 text-[1.3rem] text-gray-500">
+                        ID #{editingStaff.id}
+                      </p>
+                    )}
+                  </div>
+                  {editingStaff && (
+                    <button
+                      type="button"
+                      onClick={cancelEditStaff}
+                      disabled={isCreating}
+                      className="h-11 rounded-lg border border-gray-300 bg-white px-4 text-[1.3rem] font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                    >
+                      Hủy sửa
+                    </button>
+                  )}
+                </div>
                 <div className="mt-5 space-y-4">
                   <label className="block">
                     <span className="text-[1.3rem] font-semibold text-gray-600">
@@ -456,59 +529,69 @@ function AdminStaff() {
                     />
                   </label>
 
-                  <label className="block">
-                    <span className="text-[1.3rem] font-semibold text-gray-600">
-                      Mật khẩu tạm thời
-                    </span>
-                    <div className="relative mt-2">
-                      <input
-                        value={createPassword}
-                        onChange={(e) => setCreatePassword(e.target.value)}
-                        type={showCreatePassword ? "text" : "password"}
-                        className="h-18 w-full rounded-lg border border-gray-300 bg-white pl-4 pr-12 outline-none focus:border-amber-400"
-                        placeholder="Tối thiểu 6 ký tự"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowCreatePassword((prev) => !prev)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 transition-colors hover:text-gray-900"
-                        aria-label={
-                          showCreatePassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"
-                        }
-                      >
-                        <FontAwesomeIcon
-                          icon={showCreatePassword ? faEyeSlash : faEye}
-                        />
-                      </button>
-                    </div>
-                  </label>
+                  {!editingStaff && (
+                    <>
+                      <label className="block">
+                        <span className="text-[1.3rem] font-semibold text-gray-600">
+                          Mật khẩu tạm thời
+                        </span>
+                        <div className="relative mt-2">
+                          <input
+                            value={createPassword}
+                            onChange={(e) => setCreatePassword(e.target.value)}
+                            type={showCreatePassword ? "text" : "password"}
+                            className="h-18 w-full rounded-lg border border-gray-300 bg-white pl-4 pr-12 outline-none focus:border-amber-400"
+                            placeholder="Tối thiểu 6 ký tự"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowCreatePassword((prev) => !prev)}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 transition-colors hover:text-gray-900"
+                            aria-label={
+                              showCreatePassword
+                                ? "Ẩn mật khẩu"
+                                : "Hiện mật khẩu"
+                            }
+                          >
+                            <FontAwesomeIcon
+                              icon={showCreatePassword ? faEyeSlash : faEye}
+                            />
+                          </button>
+                        </div>
+                      </label>
 
-                  <label className="block">
-                    <span className="text-[1.3rem] font-semibold text-gray-600">
-                      Vai trò
-                    </span>
-                    <select
-                      value={createRole}
-                      onChange={(e) =>
-                        setCreateRole(e.target.value as UserRole)
-                      }
-                      className="mt-2 h-18 w-full rounded-lg border border-gray-300 bg-white px-4 outline-none focus:border-amber-400"
-                    >
-                      <option value={UserRole.MODERATOR}>
-                        {roleLabels[UserRole.MODERATOR]}
-                      </option>
-                      <option value={UserRole.CSKH}>
-                        {roleLabels[UserRole.CSKH]}
-                      </option>
-                    </select>
-                  </label>
+                      <label className="block">
+                        <span className="text-[1.3rem] font-semibold text-gray-600">
+                          Vai trò
+                        </span>
+                        <select
+                          value={createRole}
+                          onChange={(e) =>
+                            setCreateRole(e.target.value as UserRole)
+                          }
+                          className="mt-2 h-18 w-full rounded-lg border border-gray-300 bg-white px-4 outline-none focus:border-amber-400"
+                        >
+                          <option value={UserRole.MODERATOR}>
+                            {roleLabels[UserRole.MODERATOR]}
+                          </option>
+                          <option value={UserRole.CSKH}>
+                            {roleLabels[UserRole.CSKH]}
+                          </option>
+                        </select>
+                      </label>
+                    </>
+                  )}
 
                   <button
                     type="submit"
                     disabled={isCreating}
                     className="flex h-18 w-full items-center justify-center rounded-lg bg-amber-600 font-semibold text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isCreating ? "Đang xử lý..." : "Tạo nhân viên"}
+                    {isCreating
+                      ? "Đang xử lý..."
+                      : editingStaff
+                        ? "Lưu thay đổi"
+                        : "Tạo nhân viên"}
                   </button>
                 </div>
               </form>
@@ -565,6 +648,7 @@ function AdminStaff() {
           </div>
         </div>
       </div>
+
     </section>
   );
 }

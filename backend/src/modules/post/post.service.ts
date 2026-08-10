@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -46,6 +47,11 @@ import {
   LISTING_VEHICLE_FIELDS,
   normalizeListingFormSchema,
 } from '../category/listing-form-schema';
+import Redis from 'ioredis';
+import {
+  POST_VIEW_REDIS,
+  POST_VIEW_TTL_SECONDS,
+} from './post.constants';
 
 @Injectable()
 export class PostService {
@@ -69,6 +75,8 @@ export class PostService {
     private readonly geminiVisionService: GeminiVisionService,
     private readonly notificationService: NotificationService,
     private readonly listingPaymentService: ListingPaymentService,
+    @Inject(POST_VIEW_REDIS)
+    private readonly postViewRedis: Redis,
   ) {}
 
   private toNumber(value?: string): number | undefined {
@@ -542,8 +550,11 @@ export class PostService {
         'professionalSellerProfile.logoUrl',
         'professionalSellerProfile.status',
       ])
+      .addSelect("CASE WHEN post.\"promotionExpiredAt\" > NOW() AND post.\"promotionType\" = 'vip' THEN 2 WHEN post.\"promotionExpiredAt\" > NOW() AND post.\"promotionType\" = 'featured' THEN 1 ELSE 0 END", 'promotionpriority')
+      .addSelect('COALESCE(post."lastBoostedAt", post."createdAt")', 'boostedsortat')
       .where('post.status = :status', { status: publicStatus })
-      .orderBy('post.createdAt', 'DESC')
+      .orderBy('promotionpriority', 'DESC')
+      .addOrderBy('boostedsortat', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
 
@@ -1230,8 +1241,6 @@ export class PostService {
       throw new NotFoundException('Không tìm thấy tin đăng');
     }
 
-    await this.postRepo.increment({ id: post.id }, 'viewCount', 1);
-
     const reviewSummary = post.user
       ? await this.reviewRepo
           .createQueryBuilder('review')
@@ -1270,8 +1279,64 @@ export class PostService {
       data: {
         ...post,
         user: seller,
-        viewCount: post.viewCount + 1,
+        viewCount: post.viewCount,
       },
+    };
+  }
+
+  async recordView(postId: number, userId: number | undefined, viewerId: string) {
+    const post = await this.postRepo.findOne({
+      where: { id: postId },
+      select: { id: true, userId: true, status: true, viewCount: true },
+    });
+
+    if (!post || post.status === PostStatus.HIDDEN) {
+      throw new NotFoundException('Không tìm thấy tin đăng');
+    }
+
+    if (userId && post.userId === userId) {
+      return {
+        message: 'Không tính lượt xem tin của chính bạn',
+        data: { recorded: false, viewCount: post.viewCount },
+      };
+    }
+
+    const identity = userId ? `user:${userId}` : `visitor:${viewerId}`;
+    const key = `post:view:${post.id}:${identity}`;
+
+    let acquired: 'OK' | null;
+    try {
+      acquired = await this.postViewRedis.set(
+        key,
+        '1',
+        'EX',
+        POST_VIEW_TTL_SECONDS,
+        'NX',
+      );
+    } catch {
+      return {
+        message: 'Chưa thể ghi nhận lượt xem',
+        data: { recorded: false, viewCount: post.viewCount },
+      };
+    }
+
+    if (!acquired) {
+      return {
+        message: 'Lượt xem đã được ghi nhận gần đây',
+        data: { recorded: false, viewCount: post.viewCount },
+      };
+    }
+
+    try {
+      await this.postRepo.increment({ id: post.id }, 'viewCount', 1);
+    } catch (error) {
+      await this.postViewRedis.del(key).catch(() => undefined);
+      throw error;
+    }
+
+    return {
+      message: 'Đã ghi nhận lượt xem',
+      data: { recorded: true, viewCount: post.viewCount + 1 },
     };
   }
 

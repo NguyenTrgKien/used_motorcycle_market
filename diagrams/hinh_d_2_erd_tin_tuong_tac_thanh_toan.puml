@@ -1,0 +1,84 @@
+@startuml
+title Hình D.2 - ERD nhóm tin đăng, tương tác và thanh toán
+hide methods
+entity users { * id : uuid <<PK>> }
+entity categories { * id : uuid <<PK>> }
+entity posts {
+  * id : uuid <<PK>>
+  --
+  userId : uuid <<FK>>
+  categoryId : uuid <<FK>>
+  title : varchar
+  slug : varchar
+  price : bigint
+  status : enum
+}
+entity vehicles {
+  * id : uuid <<PK>>
+  --
+  postId : uuid <<FK,UQ>>
+  brandId : uuid <<FK>>
+  modelId : uuid <<FK>>
+  year : int
+  mileage : int
+  attributes : jsonb
+}
+entity post_images { * id : uuid <<PK>>
+  postId : uuid <<FK>>
+  url : text
+  isPrimary : boolean }
+entity saved_posts { * id : uuid <<PK>>
+  userId : uuid <<FK>>
+  postId : uuid <<FK>> }
+entity view_histories { * id : uuid <<PK>>
+  userId : uuid <<FK>>
+  postId : uuid <<FK>> }
+entity conversations { * id : uuid <<PK>>
+  postId : uuid <<FK>>
+  buyerId : uuid <<FK>>
+  sellerId : uuid <<FK>> }
+entity messages { * id : uuid <<PK>>
+  conversationId : uuid <<FK>>
+  userId : uuid <<FK>>
+  content : text }
+entity reviews { * id : uuid <<PK>>
+  reviewerId : uuid <<FK>>
+  revieweeId : uuid <<FK>>
+  postId : uuid <<FK>> }
+entity reports { * id : uuid <<PK>>
+  reporterId : uuid <<FK>>
+  targetId : uuid
+  status : enum }
+entity listing_payment_orders { * id : uuid <<PK>>
+  userId : uuid <<FK>>
+  postId : uuid <<FK>>
+  orderCode : varchar
+  amount : int
+  status : enum }
+entity seller_subscriptions { * id : uuid <<PK>>
+  userId : uuid <<FK>>
+  planId : uuid <<FK>> }
+entity post_boosts { * id : uuid <<PK>>
+  postId : uuid <<FK>>
+  userId : uuid <<FK>> }
+users ||--o{ posts
+categories ||--o{ posts
+posts ||--|| vehicles
+posts ||--o{ post_images
+users ||--o{ saved_posts
+posts ||--o{ saved_posts
+users ||--o{ view_histories
+posts ||--o{ view_histories
+posts ||--o{ conversations
+users ||--o{ conversations
+conversations ||--o{ messages
+users ||--o{ messages
+users ||--o{ reviews
+posts ||--o{ reviews
+users ||--o{ reports
+users ||--o{ listing_payment_orders
+posts |o--o{ listing_payment_orders
+users ||--o{ seller_subscriptions
+posts ||--o{ post_boosts
+users ||--o{ post_boosts
+@enduml

@@ -18,6 +18,7 @@ import { UpdateUserPrivacyDto } from './dto/update-user-privacy.dto';
 import { UpdateCreatePostGuideDto } from './dto/update-create-post-guide.dto';
 import { UpdateStaffRoleDto } from './dto/update-staff-role.dto';
 import { CreateStaffDto } from './dto/create-staff.dto';
+import { UpdateStaffDto } from './dto/update-staff.dto';
 import { type Request as ExpressRequest } from 'express';
 import { type User } from './entities/user.entity';
 import { Public } from 'src/common/decorators/public.decorator';
@@ -63,6 +64,16 @@ export class UserController {
   @Post('/admin/staff')
   createStaff(@Req() req: RequestWithUser, @Body() dataCreate: CreateStaffDto) {
     return this.userService.createStaff(req.user.id, dataCreate);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Patch('/admin/staff/:id')
+  updateStaff(
+    @Req() req: RequestWithUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dataUpdate: UpdateStaffDto,
+  ) {
+    return this.userService.updateStaff(req.user.id, id, dataUpdate);
   }
 
   @Roles(UserRole.ADMIN)
