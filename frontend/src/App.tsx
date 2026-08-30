@@ -219,7 +219,10 @@ function App() {
             path="seller-plans"
             element={<Navigate to="/seller/plans" replace />}
           />
-          <Route path="identity-verification" element={<IdentityVerification />} />
+          <Route
+            path="identity-verification"
+            element={<IdentityVerification />}
+          />
         </Route>
       </Route>
       <Route
@@ -242,11 +245,7 @@ function App() {
       <Route
         path="/admin"
         element={
-          <GuardRoute
-            requireAuth={true}
-            roles={adminRoles}
-            area="admin"
-          >
+          <GuardRoute requireAuth={true} roles={adminRoles} area="admin">
             <AdminLayout />
           </GuardRoute>
         }
@@ -351,7 +350,10 @@ function App() {
         <Route
           path="reports"
           element={
-            <GuardRoute requireAuth={true} roles={[UserRole.ADMIN, UserRole.CSKH]}>
+            <GuardRoute
+              requireAuth={true}
+              roles={[UserRole.ADMIN, UserRole.CSKH]}
+            >
               <AdminReports />
             </GuardRoute>
           }
@@ -359,11 +361,7 @@ function App() {
         <Route
           path="notifications"
           element={
-            <GuardRoute
-              requireAuth={true}
-              roles={adminRoles}
-              area="admin"
-            >
+            <GuardRoute requireAuth={true} roles={adminRoles} area="admin">
               <AdminNotifications />
             </GuardRoute>
           }
@@ -371,11 +369,7 @@ function App() {
         <Route
           path="messages"
           element={
-            <GuardRoute
-              requireAuth={true}
-              roles={adminRoles}
-              area="admin"
-            >
+            <GuardRoute requireAuth={true} roles={adminRoles} area="admin">
               <AdminMessages />
             </GuardRoute>
           }
@@ -383,11 +377,7 @@ function App() {
         <Route
           path="posts/pending"
           element={
-            <GuardRoute
-              requireAuth={true}
-              roles={postReviewRoles}
-              area="admin"
-            >
+            <GuardRoute requireAuth={true} roles={postReviewRoles} area="admin">
               <PendingPosts />
             </GuardRoute>
           }
@@ -395,11 +385,7 @@ function App() {
         <Route
           path="posts/pending/:slug"
           element={
-            <GuardRoute
-              requireAuth={true}
-              roles={postReviewRoles}
-              area="admin"
-            >
+            <GuardRoute requireAuth={true} roles={postReviewRoles} area="admin">
               <PostReview />
             </GuardRoute>
           }
