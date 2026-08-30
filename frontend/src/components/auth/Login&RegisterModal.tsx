@@ -238,7 +238,7 @@ function LoginAndRegisterModal({ onClose }: LoginAndRegisterModalProp) {
   };
 
   const handleLoginWithGoogle = () => {
-    window.location.href = "http://localhost:8080/api/v1/auth/login-google";
+    window.location.href = `${import.meta.env.VITE_API_BASE_URL}/api/v1/auth/login-google`;
   };
 
   return (
