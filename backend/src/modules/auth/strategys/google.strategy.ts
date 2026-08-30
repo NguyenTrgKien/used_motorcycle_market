@@ -19,6 +19,9 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   ) {
     const clientID = config.get<string>('GOOGLE_CLIENT_ID');
     const clientSecret = config.get<string>('GOOGLE_SECRET');
+    const callbackURL =
+      config.get<string>('GOOGLE_CALLBACK_URL') ||
+      'http://localhost:8080/api/v1/auth/google/callback';
 
     if (!clientID || !clientSecret) {
       throw new InternalServerErrorException('Missing Google OAuth config');
@@ -27,7 +30,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     super({
       clientID,
       clientSecret,
-      callbackURL: 'http://localhost:8080/api/v1/auth/google/callback',
+      callbackURL,
       scope: ['email', 'profile'],
     });
   }

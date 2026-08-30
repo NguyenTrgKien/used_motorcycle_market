@@ -493,7 +493,7 @@ export class AuthController {
       ...cookieOptions,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
-    return res.redirect('http://localhost:5173');
+    return res.redirect(process.env.FRONTEND_URL || 'http://localhost:5173');
   }
 
   @Patch('/2fa/send-otp')
