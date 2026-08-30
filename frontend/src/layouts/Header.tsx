@@ -17,6 +17,7 @@ import {
   faTableCells,
   faTags,
   faReceipt,
+  faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   faBell,
@@ -54,6 +55,28 @@ interface HeaderNotification {
 interface HeaderNotificationsResponse {
   data: HeaderNotification[];
   unreadCount: number;
+}
+
+interface SearchBrand {
+  id: number;
+  name: string;
+  isActive: boolean;
+}
+
+interface SearchPost {
+  id: number;
+  title: string;
+  slug: string;
+  vehicle?: {
+    brandName?: string;
+    modelName?: string;
+  };
+}
+
+interface SearchPostsResponse {
+  data: {
+    items: SearchPost[];
+  };
 }
 
 const utilities = [
@@ -134,6 +157,7 @@ function Header() {
   const elementAreaMobileRef = useRef<HTMLDivElement>(null);
   const headerLocationRef = useRef<HTMLDivElement>(null);
   const categoryMenuRef = useRef<HTMLDivElement>(null);
+  const searchRequestRef = useRef(0);
   const [isFixed, setIsFixed] = useState(false);
   const [showPopupArea, setShowPopupArea] = useState(false);
   const [showHeaderLocation, setShowHeaderLocation] = useState(false);
@@ -146,6 +170,21 @@ function Header() {
   const [searchKeyword, setSearchKeyword] = useState(
     () => new URLSearchParams(window.location.search).get("keyword") || "",
   );
+  const [searchBrands, setSearchBrands] = useState<SearchBrand[]>([]);
+  const [searchPosts, setSearchPosts] = useState<SearchPost[]>([]);
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    try {
+      const value = JSON.parse(localStorage.getItem("recentVehicleSearches") || "[]");
+      return Array.isArray(value)
+        ? value.filter((item) => typeof item === "string").slice(0, 5)
+        : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isLoadingSearchSuggestions, setIsLoadingSearchSuggestions] =
+    useState(false);
 
   useEffect(() => {
     const handleClickOutSide = (e: MouseEvent) => {
@@ -199,6 +238,55 @@ function Header() {
   }, [location.search]);
 
   useEffect(() => {
+    const fetchBrands = async () => {
+      try {
+        const response = await axiosInstance.get<{ data: SearchBrand[] }>(
+          "/api/v1/vehicle/brands",
+        );
+        setSearchBrands(
+          (response.data.data || []).filter((brand) => brand.isActive),
+        );
+      } catch {
+        setSearchBrands([]);
+      }
+    };
+
+    void fetchBrands();
+  }, []);
+
+  useEffect(() => {
+    const keyword = searchKeyword.trim();
+    if (keyword.length < 2) {
+      searchRequestRef.current += 1;
+      setSearchPosts([]);
+      setIsLoadingSearchSuggestions(false);
+      return;
+    }
+
+    const requestId = ++searchRequestRef.current;
+    const timeout = window.setTimeout(async () => {
+      try {
+        setIsLoadingSearchSuggestions(true);
+        const response = await axiosInstance.get<SearchPostsResponse>(
+          "/api/v1/posts",
+          { params: { keyword, limit: 6 } },
+        );
+        if (requestId === searchRequestRef.current) {
+          setSearchPosts(response.data.data.items || []);
+        }
+      } catch {
+        if (requestId === searchRequestRef.current) setSearchPosts([]);
+      } finally {
+        if (requestId === searchRequestRef.current) {
+          setIsLoadingSearchSuggestions(false);
+        }
+      }
+    }, 350);
+
+    return () => window.clearTimeout(timeout);
+  }, [searchKeyword]);
+
+  useEffect(() => {
     const fetchNotifications = async () => {
       if (!user) {
         setUnreadNotifications(0);
@@ -226,20 +314,176 @@ function Header() {
 
   const handleLogout = async () => await logout();
 
-  const handleSearchMotor = () => {
+  const saveRecentSearch = (value: string) => {
+    const keyword = value.trim();
+    if (!keyword) return;
+    const next = [
+      keyword,
+      ...recentSearches.filter(
+        (item) => item.toLowerCase() !== keyword.toLowerCase(),
+      ),
+    ].slice(0, 5);
+    setRecentSearches(next);
+    localStorage.setItem("recentVehicleSearches", JSON.stringify(next));
+  };
+
+  const handleSearchMotor = (overrideKeyword?: string) => {
     const searchParams = new URLSearchParams();
-    const keyword = searchKeyword.trim();
+    const keyword = (overrideKeyword ?? searchKeyword).trim();
 
     if (keyword) {
       searchParams.set("keyword", keyword);
+      saveRecentSearch(keyword);
     }
     if (selectedLocation?.province) {
       searchParams.set("province", selectedLocation.province);
     }
 
     const query = searchParams.toString();
+    setIsSearchFocused(false);
     navigate(query ? `/vehicles?${query}` : "/vehicles");
   };
+
+  const handleBrandSuggestion = (brandName: string) => {
+    const searchParams = new URLSearchParams({ brandName });
+    if (selectedLocation?.province) {
+      searchParams.set("province", selectedLocation.province);
+    }
+    saveRecentSearch(brandName);
+    setSearchKeyword(brandName);
+    setIsSearchFocused(false);
+    navigate(`/vehicles?${searchParams.toString()}`);
+  };
+
+  const normalizedSearchKeyword = searchKeyword
+    .trim()
+    .toLocaleLowerCase("vi");
+  const matchingBrands =
+    normalizedSearchKeyword.length >= 2
+      ? searchBrands
+          .filter((brand) =>
+            brand.name
+              .toLocaleLowerCase("vi")
+              .includes(normalizedSearchKeyword),
+          )
+          .slice(0, 4)
+      : [];
+  const matchingModels =
+    normalizedSearchKeyword.length >= 2
+      ? Array.from(
+          new Map(
+            searchPosts
+              .filter((post) => post.vehicle?.modelName)
+              .map((post) => {
+                const name = `${post.vehicle?.brandName || ""} ${post.vehicle?.modelName || ""}`.trim();
+                return [name.toLocaleLowerCase("vi"), name];
+              }),
+          ).values(),
+        ).slice(0, 3)
+      : [];
+  const showSearchSuggestions =
+    isSearchFocused &&
+    (Boolean(searchKeyword.trim()) || recentSearches.length > 0);
+
+  const searchSuggestions = showSearchSuggestions ? (
+    <div className="absolute left-0 top-[calc(100%+0.6rem)] z-[1000] max-h-[36rem] w-full overflow-y-auto rounded-xl border border-gray-200 bg-white py-2 text-gray-800 shadow-xl">
+      {searchKeyword.trim().length < 2 ? (
+        <>
+          <div className="px-5 py-2 text-[1.2rem] font-medium uppercase tracking-wide text-gray-400">
+            Tìm kiếm gần đây
+          </div>
+          {recentSearches.map((item) => (
+            <button
+              key={item}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => handleSearchMotor(item)}
+              className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-gray-50"
+            >
+              <FontAwesomeIcon
+                icon={faClockRotateLeft}
+                className="text-gray-400"
+              />
+              <span className="truncate">{item}</span>
+            </button>
+          ))}
+        </>
+      ) : (
+        <>
+          {matchingBrands.map((brand) => (
+            <button
+              key={`brand-${brand.id}`}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => handleBrandSuggestion(brand.name)}
+              className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-gray-50"
+            >
+              <FontAwesomeIcon icon={faTags} className="text-orange-500" />
+              <span className="truncate">
+                <span className="text-gray-400">Hãng xe · </span>
+                {brand.name}
+              </span>
+            </button>
+          ))}
+          {matchingModels.map((model) => (
+            <button
+              key={`model-${model}`}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => handleSearchMotor(model)}
+              className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-gray-50"
+            >
+              <FontAwesomeIcon icon={faSearch} className="text-gray-400" />
+              <span className="truncate">
+                <span className="text-gray-400">Dòng xe · </span>
+                {model}
+              </span>
+            </button>
+          ))}
+          {searchPosts.slice(0, 4).map((post) => (
+            <button
+              key={`post-${post.id}`}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                setIsSearchFocused(false);
+                navigate(`/posts/${post.slug}`);
+              }}
+              className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-gray-50"
+            >
+              <FontAwesomeIcon
+                icon={faMagnifyingGlass}
+                className="text-gray-400"
+              />
+              <span className="truncate">{post.title}</span>
+            </button>
+          ))}
+          {isLoadingSearchSuggestions && (
+            <div className="px-5 py-3 text-gray-400">Đang tìm gợi ý...</div>
+          )}
+          {!isLoadingSearchSuggestions &&
+            matchingBrands.length === 0 &&
+            matchingModels.length === 0 &&
+            searchPosts.length === 0 && (
+              <div className="px-5 py-3 text-gray-400">
+                Không tìm thấy gợi ý phù hợp
+              </div>
+            )}
+          <button
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => handleSearchMotor()}
+            className="flex w-full items-center gap-3 border-t border-gray-100 px-5 py-3 text-left font-medium text-orange-600 hover:bg-orange-50"
+          >
+            <FontAwesomeIcon icon={faSearch} />
+            <span className="truncate">
+              Xem tất cả kết quả cho “{searchKeyword.trim()}”
+            </span>
+          </button>
+        </>
+      )}
+    </div>
+  ) : null;
 
   const formatNotificationDate = (value: string) => {
     const date = new Date(value);
@@ -446,18 +690,35 @@ function Header() {
               }}
             >
               <input
-                type="text"
+                type="search"
                 value={searchKeyword}
                 onChange={(event) => setSearchKeyword(event.target.value)}
-                className="w-full h-full border border-gray-300 rounded-full focus:border-orange-500 outline-none pl-[2rem] pr-[5rem]"
-                placeholder="Xin chào! Hôm này bạn cần tìm gì?"
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() =>
+                  window.setTimeout(() => setIsSearchFocused(false), 120)
+                }
+                aria-label="Tìm kiếm xe"
+                className="w-full h-full border border-gray-300 rounded-full focus:border-orange-500 outline-none pl-[2rem] pr-[5rem] [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
+                placeholder="Tìm theo hãng, dòng xe hoặc tên xe..."
               />
+              {searchKeyword && (
+                <button
+                  type="button"
+                  aria-label="Xóa từ khóa"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => setSearchKeyword("")}
+                  className="absolute right-[4rem] top-0 flex h-[4rem] w-[3rem] items-center justify-center text-gray-400 hover:text-gray-700"
+                >
+                  <FontAwesomeIcon icon={faXmark} />
+                </button>
+              )}
               <button
                 type="submit"
                 className="absolute top-0 right-0 w-[5rem] h-[4rem] flex items-center justify-center cursor-pointer text-gray-500"
               >
                 <FontAwesomeIcon icon={faSearch} />
               </button>
+              {searchSuggestions}
             </form>
           )}
 
@@ -754,12 +1015,28 @@ function Header() {
                 <FontAwesomeIcon icon={faSearch} />
               </button>
               <input
-                type="text"
+                type="search"
                 value={searchKeyword}
                 onChange={(event) => setSearchKeyword(event.target.value)}
-                className="flex-1 h-full outline-none pl-[5.5rem] pr-3 min-w-0"
-                placeholder="Xin chào! Hôm này bạn cần tìm gì?"
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() =>
+                  window.setTimeout(() => setIsSearchFocused(false), 120)
+                }
+                aria-label="Tìm kiếm xe"
+                className="flex-1 h-full outline-none pl-[5.5rem] pr-3 min-w-0 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
+                placeholder="Tìm theo hãng, dòng xe hoặc tên xe..."
               />
+              {searchKeyword && (
+                <button
+                  type="button"
+                  aria-label="Xóa từ khóa"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => setSearchKeyword("")}
+                  className="flex h-full w-[3.5rem] shrink-0 items-center justify-center text-gray-400 hover:text-gray-700"
+                >
+                  <FontAwesomeIcon icon={faXmark} />
+                </button>
+              )}
               <div className="relative flex items-center gap-2 sm:gap-5 justify-end pr-[1.5rem] sm:pr-[3rem] shrink-0">
                 <div className="relative hidden lg:block" ref={elementAreaRef}>
                   <button
@@ -767,7 +1044,9 @@ function Header() {
                     className="flex items-center justify-between w-[20rem] h-[4.5rem] text-start rounded-md bg-white border border-gray-300 px-6 outline-none cursor-pointer"
                     onClick={() => setShowPopupArea((prev) => !prev)}
                   >
-                    <span>Chọn khu vực</span>
+                    <span className="truncate">
+                      {selectedLocation?.province || "Chọn khu vực"}
+                    </span>
                     <FontAwesomeIcon icon={faAngleDown} />
                   </button>
                   <AnimatePresence>
@@ -783,6 +1062,7 @@ function Header() {
                   Tìm xe
                 </button>
               </div>
+              {searchSuggestions}
             </form>
 
             <div
@@ -793,7 +1073,9 @@ function Header() {
                 className="flex items-center justify-between w-full h-[4rem] text-start rounded-md bg-white border border-gray-300 px-6 outline-none text-gray-600 cursor-pointer"
                 onClick={() => setShowPopupArea((prev) => !prev)}
               >
-                <span>Chọn khu vực</span>
+                <span className="truncate">
+                  {selectedLocation?.province || "Chọn khu vực"}
+                </span>
                 <FontAwesomeIcon icon={faAngleDown} />
               </button>
               <AnimatePresence>

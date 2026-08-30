@@ -41,6 +41,7 @@ import AdminProfessionalSellers from "./pages/admin/AdminProfessionalSellers";
 import ListingPaymentResult from "./pages/user/ListingPaymentResult";
 import AdminRevenue from "./pages/admin/AdminRevenue";
 import AdminTransactions from "./pages/admin/AdminTransactions";
+import AdminTransactionHistory from "./pages/admin/AdminTransactionHistory";
 import IdentityVerification from "./pages/user/setting/IdentityVerification";
 import AdminIdentityVerifications from "./pages/admin/AdminIdentityVerifications";
 import PromotionPlans from "./pages/user/Post/PromotionPlans";
@@ -320,6 +321,14 @@ function App() {
           element={
             <GuardRoute requireAuth={true} roles={[UserRole.ADMIN]}>
               <AdminTransactions />
+            </GuardRoute>
+          }
+        />
+        <Route
+          path="transaction-history"
+          element={
+            <GuardRoute requireAuth={true} roles={[UserRole.ADMIN]}>
+              <AdminTransactionHistory />
             </GuardRoute>
           }
         />

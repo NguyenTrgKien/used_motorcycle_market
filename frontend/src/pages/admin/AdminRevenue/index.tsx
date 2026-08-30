@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import axiosInstance from "../../../configs/axiosInstance";
+import { useNavigate } from "react-router-dom";
+import RevenueTrendChart from "./RevenueTrendChart";
 
 interface PaidOrder {
   id: string;
@@ -19,21 +21,39 @@ const methodLabels: Record<string, string> = {
   bank_transfer: "Chuyển khoản",
 };
 
+interface RevenueSummary {
+  totalRevenue: number;
+  transactionCount: number;
+  averageOrderValue: number;
+  todayRevenue: number;
+}
+
+const initialSummary: RevenueSummary = {
+  totalRevenue: 0,
+  transactionCount: 0,
+  averageOrderValue: 0,
+  todayRevenue: 0,
+};
+
 function AdminRevenue() {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<PaidOrder[]>([]);
+  const [summary, setSummary] = useState<RevenueSummary>(initialSummary);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadRevenue = async () => {
     try {
       setIsLoading(true);
-      const response = await axiosInstance.get(
-        "/api/v1/listing-payments/admin/orders",
-      );
+      const [ordersResponse, summaryResponse] = await Promise.all([
+        axiosInstance.get("/api/v1/listing-payments/admin/orders"),
+        axiosInstance.get("/api/v1/listing-payments/admin/revenue-summary"),
+      ]);
       setOrders(
-        (response.data.data || []).filter(
+        (ordersResponse.data.data || []).filter(
           (order: { status: string }) => order.status === "paid",
         ),
       );
+      setSummary(summaryResponse.data.data || initialSummary);
     } catch (error: any) {
       toast.error(
         error?.response?.data?.message || "Không thể tải dữ liệu doanh thu",
@@ -47,52 +67,59 @@ function AdminRevenue() {
     void loadRevenue();
   }, []);
 
-  const totalRevenue = useMemo(
-    () => orders.reduce((total, order) => total + Number(order.amount), 0),
-    [orders],
-  );
-  const revenueByType = useMemo(() => orders.reduce<Record<string, number>>((result, order) => {
-    const type = order.orderType || "listing";
-    result[type] = (result[type] || 0) + Number(order.amount);
-    return result;
-  }, {}), [orders]);
-
   return (
     <section className="px-5 py-6 md:px-8">
       <div className="space-y-6">
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl border border-gray-200 bg-white p-6">
-            <p className="text-gray-500">Tổng doanh thu đăng tin</p>
+            <p className="text-gray-500">Tổng doanh thu</p>
             <p className="mt-2 text-[2.6rem] font-semibold text-gray-900">
-              {totalRevenue.toLocaleString("vi-VN")}đ
+              {summary.totalRevenue.toLocaleString("vi-VN")}đ
             </p>
           </div>
-          {Object.entries(revenueByType).map(([type, amount]) => (
-            <div key={type} className="rounded-2xl border border-gray-200 bg-white p-6">
-              <p className="text-gray-500">{type}</p>
-              <p className="mt-2 text-[2.2rem] font-semibold text-amber-600">{amount.toLocaleString("vi-VN")}đ</p>
-            </div>
-          ))}
           <div className="rounded-2xl border border-gray-200 bg-white p-6">
-            <p className="text-gray-500">Giao dịch thành công</p>
+            <p className="text-gray-500">Số giao dịch</p>
             <p className="mt-2 text-[2.6rem] font-semibold text-green-600">
-              {orders.length}
+              {summary.transactionCount.toLocaleString("vi-VN")}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-6">
+            <p className="text-gray-500">Giá trị TB/đơn</p>
+            <p className="mt-2 text-[2.6rem] font-semibold text-amber-600">
+              {Math.round(summary.averageOrderValue).toLocaleString("vi-VN")}đ
+            </p>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-6">
+            <p className="text-gray-500">Doanh thu hôm nay</p>
+            <p className="mt-2 text-[2.6rem] font-semibold text-blue-600">
+              {summary.todayRevenue.toLocaleString("vi-VN")}đ
             </p>
           </div>
         </div>
 
+        <RevenueTrendChart />
+
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
           <div className="flex items-center justify-between border-b border-gray-200 p-6">
             <h2 className="text-[1.8rem] font-semibold text-gray-900">
-              Lịch sử doanh thu
+              Lịch sử giao dịch
             </h2>
-            <button
-              type="button"
-              onClick={() => void loadRevenue()}
-              className="rounded-xl border border-gray-300 px-5 py-3"
-            >
-              Tải lại
-            </button>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => void loadRevenue()}
+                className="rounded-xl border border-gray-300 px-5 py-3"
+              >
+                Tải lại
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/admin/transaction-history")}
+                className="rounded-xl bg-blue-500 px-5 py-3 font-medium text-white transition-colors hover:bg-gray-700"
+              >
+                Xem tất cả
+              </button>
+            </div>
           </div>
           {isLoading ? (
             <div className="p-10 text-center text-gray-500">Đang tải...</div>
@@ -114,7 +141,7 @@ function AdminRevenue() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {orders.map((order) => (
+                  {orders.slice(0, 10).map((order) => (
                     <tr key={order.id}>
                       <td className="p-4 font-medium">{order.code}</td>
                       <td className="p-4">

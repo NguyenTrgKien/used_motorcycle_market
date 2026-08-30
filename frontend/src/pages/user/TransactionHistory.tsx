@@ -54,7 +54,7 @@ const typeLabels: Record<PaymentOrder["orderType"], string> = {
 
 const methodLabels: Record<PaymentOrder["method"], string> = {
   vnpay: "VNPay",
-  momo: "Ví MoMo",
+  momo: "MoMo",
   bank_transfer: "Chuyển khoản ngân hàng",
 };
 

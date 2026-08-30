@@ -14,6 +14,7 @@ import {
   faIdCard,
   faMoneyCheckDollar,
   faTags,
+  faClockRotateLeft,
 } from "@fortawesome/free-solid-svg-icons";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
@@ -68,6 +69,12 @@ const adminNavItems = [
     label: "Xử lý giao dịch",
     icon: faMoneyCheckDollar,
     path: "/admin/transactions",
+    roles: [UserRole.ADMIN],
+  },
+  {
+    label: "Lịch sử giao dịch",
+    icon: faClockRotateLeft,
+    path: "/admin/transaction-history",
     roles: [UserRole.ADMIN],
   },
 
@@ -173,6 +180,10 @@ const pageTitles: Record<string, { eyebrow: string; title: string }> = {
   "/admin/transactions": {
     eyebrow: "Thanh toán đăng tin",
     title: "Xử lý giao dịch",
+  },
+  "/admin/transaction-history": {
+    eyebrow: "Tra cứu thanh toán",
+    title: "Lịch sử giao dịch",
   },
   "/admin/monetization": {
     eyebrow: "Cấu hình doanh thu",

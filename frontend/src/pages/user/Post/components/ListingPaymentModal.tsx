@@ -18,7 +18,7 @@ interface ListingPaymentModalProps {
 
 const methods = [
   { value: "vnpay", label: "VNPay" },
-  { value: "momo", label: "Ví MoMo" },
+  { value: "momo", label: "MoMo" },
   { value: "bank_transfer", label: "Chuyển khoản ngân hàng" },
 ];
 

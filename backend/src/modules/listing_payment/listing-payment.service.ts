@@ -7,7 +7,13 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
 import { createHmac, timingSafeEqual } from 'crypto';
-import { EntityManager, In, IsNull, LessThanOrEqual, Repository } from 'typeorm';
+import {
+  EntityManager,
+  In,
+  IsNull,
+  LessThanOrEqual,
+  Repository,
+} from 'typeorm';
 import {
   SellerType,
   PostStatus,
@@ -152,7 +158,8 @@ export class ListingPaymentService {
 
     const pricingGroup = this.getPricingGroup(category);
     if (user.sellerType === SellerType.PROFESSIONAL) {
-      const hasSubscriptionAllowance = await this.monetizationService.consumeListingAllowance(manager, userId);
+      const hasSubscriptionAllowance =
+        await this.monetizationService.consumeListingAllowance(manager, userId);
       if (hasSubscriptionAllowance) {
         return {
           billingType: ListingBillingType.FREE,
@@ -265,31 +272,41 @@ export class ListingPaymentService {
     let postId: number | undefined;
     let metadata: Record<string, unknown> = {};
     if (orderType === MonetizationProductType.SUBSCRIPTION) {
-      if (!dto.subscriptionPlanId) throw new BadRequestException('Vui lòng chọn gói tháng');
-      const plan = await this.monetizationService.resolveSubscription(userId, dto.subscriptionPlanId);
+      if (!dto.subscriptionPlanId)
+        throw new BadRequestException('Vui lòng chọn gói tháng');
+      const plan = await this.monetizationService.resolveSubscription(
+        userId,
+        dto.subscriptionPlanId,
+      );
       amount = plan.price;
       metadata = { subscriptionPlanId: plan.id };
     } else {
-      if (!dto.pricingPlanId) throw new BadRequestException('Vui lòng chọn sản phẩm');
-      const product = await this.monetizationService.resolveProduct(userId, dto.pricingPlanId, dto.postId);
+      if (!dto.pricingPlanId)
+        throw new BadRequestException('Vui lòng chọn sản phẩm');
+      const product = await this.monetizationService.resolveProduct(
+        userId,
+        dto.pricingPlanId,
+        dto.postId,
+      );
       amount = product.plan.price;
       postId = product.post?.id;
     }
     await this.expirePendingOrders(userId);
     const existing = await this.orderRepo.findOne({
-      where: orderType === MonetizationProductType.SUBSCRIPTION
-        ? {
-            userId,
-            orderType,
-            status: ListingPaymentStatus.PENDING,
-          }
-        : {
-            userId,
-            postId,
-            orderType,
-            pricingPlanId: dto.pricingPlanId,
-            status: ListingPaymentStatus.PENDING,
-          },
+      where:
+        orderType === MonetizationProductType.SUBSCRIPTION
+          ? {
+              userId,
+              orderType,
+              status: ListingPaymentStatus.PENDING,
+            }
+          : {
+              userId,
+              postId,
+              orderType,
+              pricingPlanId: dto.pricingPlanId,
+              status: ListingPaymentStatus.PENDING,
+            },
       order: { createdAt: 'DESC' },
     });
     if (existing?.transferSubmittedAt || existing?.receiptUrl) {
@@ -304,14 +321,25 @@ export class ListingPaymentService {
         existing.metadata = metadata;
         existing.expiresAt = new Date(Date.now() + 15 * 60 * 1000);
       }
-      return this.createPaymentResponse(await this.orderRepo.save(existing), ipAddress);
+      return this.createPaymentResponse(
+        await this.orderRepo.save(existing),
+        ipAddress,
+      );
     }
-    const order = await this.orderRepo.save(this.orderRepo.create({
-      code: this.createOrderCode(), userId, postId, amount, method: dto.method,
-      orderType, pricingPlanId: dto.pricingPlanId, metadata,
-      status: ListingPaymentStatus.PENDING,
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-    }));
+    const order = await this.orderRepo.save(
+      this.orderRepo.create({
+        code: this.createOrderCode(),
+        userId,
+        postId,
+        amount,
+        method: dto.method,
+        orderType,
+        pricingPlanId: dto.pricingPlanId,
+        metadata,
+        status: ListingPaymentStatus.PENDING,
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      }),
+    );
     return this.createPaymentResponse(order, ipAddress);
   }
 
@@ -445,7 +473,10 @@ export class ListingPaymentService {
       .replace(/\D/g, '');
   }
 
-  private async createPaymentResponse(order: ListingPaymentOrder, ipAddress: string) {
+  private async createPaymentResponse(
+    order: ListingPaymentOrder,
+    ipAddress: string,
+  ) {
     if (order.method === ListingPaymentMethod.VNPAY) {
       return { data: order, paymentUrl: this.createVnpayUrl(order, ipAddress) };
     }
@@ -453,17 +484,39 @@ export class ListingPaymentService {
       return { data: order, paymentUrl: await this.createMomoUrl(order) };
     }
     const bankName = this.configService.get<string>('BANK_NAME') || '';
-    const accountNumber = this.configService.get<string>('BANK_ACCOUNT_NUMBER') || '';
-    const accountName = this.configService.get<string>('BANK_ACCOUNT_NAME') || '';
+    const accountNumber =
+      this.configService.get<string>('BANK_ACCOUNT_NUMBER') || '';
+    const accountName =
+      this.configService.get<string>('BANK_ACCOUNT_NAME') || '';
     const bankBin = this.configService.get<string>('BANK_BIN') || '';
-    if (!bankName || !/^\d{6}$/.test(bankBin) || !/^\d{6,19}$/.test(accountNumber) || !accountName) {
-      throw new BadRequestException('Chuyển khoản ngân hàng chưa được cấu hình');
+    if (
+      !bankName ||
+      !/^\d{6}$/.test(bankBin) ||
+      !/^\d{6,19}$/.test(accountNumber) ||
+      !accountName
+    ) {
+      throw new BadRequestException(
+        'Chuyển khoản ngân hàng chưa được cấu hình',
+      );
     }
-    const qrImageUrl = new URL(`https://img.vietqr.io/image/${bankBin}-${accountNumber}-compact2.png`);
+    const qrImageUrl = new URL(
+      `https://img.vietqr.io/image/${bankBin}-${accountNumber}-compact2.png`,
+    );
     qrImageUrl.searchParams.set('amount', String(order.amount));
     qrImageUrl.searchParams.set('addInfo', order.code);
     qrImageUrl.searchParams.set('accountName', accountName);
-    return { data: order, bankTransfer: { bankName, accountNumber, accountName, amount: order.amount, content: order.code, qrImageUrl: qrImageUrl.toString(), expiresAt: order.expiresAt } };
+    return {
+      data: order,
+      bankTransfer: {
+        bankName,
+        accountNumber,
+        accountName,
+        amount: order.amount,
+        content: order.code,
+        qrImageUrl: qrImageUrl.toString(),
+        expiresAt: order.expiresAt,
+      },
+    };
   }
 
   private encodeVnpay(value: string) {
@@ -518,11 +571,14 @@ export class ListingPaymentService {
     const redirectUrl =
       this.configService.get<string>('MOMO_REDIRECT_URL') || '';
     const ipnUrl = this.configService.get<string>('MOMO_IPN_URL') || '';
-    const requestId = order.code;
-    const orderId = order.code;
+    const gatewayOrderId = `${order.code}-${Date.now()}`;
+    const requestId = gatewayOrderId;
+    const orderId = gatewayOrderId;
     const orderInfo = `Thanh toan phi dang tin ${order.code}`;
-    const requestType = 'captureWallet';
-    const extraData = '';
+    const requestType = 'payWithATM';
+    const extraData = Buffer.from(
+      JSON.stringify({ orderCode: order.code }),
+    ).toString('base64');
     if (!partnerCode || !accessKey || !secretKey || !redirectUrl || !ipnUrl) {
       throw new BadRequestException('MoMo chưa được cấu hình');
     }
@@ -536,6 +592,9 @@ export class ListingPaymentService {
       .digest('hex');
     const response = await axios.post<MomoCreateResponse>(endpoint, {
       partnerCode,
+      accessKey,
+      partnerName: 'Motorbike Marketplace',
+      storeId: 'MotorbikeMarketplace',
       requestId,
       amount: order.amount,
       orderId,
@@ -646,6 +705,20 @@ export class ListingPaymentService {
     return this.safeCompare(payload.signature, expected);
   }
 
+  private getMomoOrderCode(payload: MomoIpnPayload) {
+    if (!payload.extraData) return payload.orderId;
+    try {
+      const data = JSON.parse(
+        Buffer.from(payload.extraData, 'base64').toString('utf8'),
+      ) as { orderCode?: unknown };
+      return typeof data.orderCode === 'string'
+        ? data.orderCode
+        : payload.orderId;
+    } catch {
+      return payload.orderId;
+    }
+  }
+
   async handleMomoIpn(payload: MomoIpnPayload) {
     if (!this.verifyMomoSignature(payload)) {
       throw new BadRequestException('Chữ ký MoMo không hợp lệ');
@@ -656,11 +729,13 @@ export class ListingPaymentService {
     ) {
       throw new BadRequestException('Mã đối tác MoMo không hợp lệ');
     }
-    const order = await this.orderRepo.findOne({
-      where: { code: payload.orderId },
-    });
+    const orderCode = this.getMomoOrderCode(payload);
+    const order = await this.orderRepo.findOne({ where: { code: orderCode } });
     if (!order) throw new NotFoundException('Không tìm thấy đơn thanh toán');
-    if (payload.amount !== order.amount || payload.requestId !== order.code) {
+    if (
+      payload.amount !== order.amount ||
+      payload.requestId !== payload.orderId
+    ) {
       throw new BadRequestException('Số tiền MoMo không hợp lệ');
     }
 
@@ -695,15 +770,21 @@ export class ListingPaymentService {
       await this.markPaid(order, `BANK-${order.code}`, {
         confirmedManually: true,
       });
-      const post = order.postId ? await this.postRepo.findOne({
-        where: { id: order.postId! },
-        select: { id: true, title: true },
-      }) : null;
-      const pricingPlan = await this.monetizationService.findPricingPlanById(order.pricingPlanId);
+      const post = order.postId
+        ? await this.postRepo.findOne({
+            where: { id: order.postId! },
+            select: { id: true, title: true },
+          })
+        : null;
+      const pricingPlan = await this.monetizationService.findPricingPlanById(
+        order.pricingPlanId,
+      );
       const isBoost = order.orderType === MonetizationProductType.BOOST;
       await this.notificationService.createNotification({
         userId: order.userId,
-        title: isBoost ? 'Gói đẩy tin đã được kích hoạt' : 'Thanh toán chuyển khoản đã được xác nhận',
+        title: isBoost
+          ? 'Gói đẩy tin đã được kích hoạt'
+          : 'Thanh toán chuyển khoản đã được xác nhận',
         content: isBoost
           ? `Gói "${pricingPlan?.name || 'Đẩy tin'}" cho tin "${post?.title || `#${order.postId}`}" đã bắt đầu. Lượt đẩy đầu tiên đã được thực hiện.`
           : post
@@ -873,6 +954,103 @@ export class ListingPaymentService {
     };
   }
 
+  async getRevenueSummary() {
+    const summary = await this.orderRepo
+      .createQueryBuilder('order')
+      .select(
+        'COALESCE(SUM(CASE WHEN order.status = :paid THEN order.amount ELSE 0 END), 0)',
+        'totalRevenue',
+      )
+      .addSelect(
+        'COUNT(CASE WHEN order.status = :paid THEN 1 END)',
+        'transactionCount',
+      )
+      .addSelect(
+        'COALESCE(AVG(CASE WHEN order.status = :paid THEN order.amount END), 0)',
+        'averageOrderValue',
+      )
+      .addSelect(
+        `COALESCE(SUM(CASE WHEN order.status = :paid AND (order.paidAt AT TIME ZONE 'Asia/Bangkok')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date THEN order.amount ELSE 0 END), 0)`,
+        'todayRevenue',
+      )
+      .setParameter('paid', ListingPaymentStatus.PAID)
+      .getRawOne<{
+        totalRevenue: string;
+        transactionCount: string;
+        averageOrderValue: string;
+        todayRevenue: string;
+      }>();
+
+    return {
+      data: {
+        totalRevenue: Number(summary?.totalRevenue || 0),
+        transactionCount: Number(summary?.transactionCount || 0),
+        averageOrderValue: Number(summary?.averageOrderValue || 0),
+        todayRevenue: Number(summary?.todayRevenue || 0),
+      },
+    };
+  }
+
+  async getRevenueTrends(range = '30d') {
+    if (!['7d', '30d'].includes(range)) {
+      throw new BadRequestException('Khoảng thời gian chỉ hỗ trợ 7d hoặc 30d');
+    }
+
+    const days = range === '7d' ? 7 : 30;
+    const rows = await this.orderRepo
+      .createQueryBuilder('order')
+      .select(
+        `TO_CHAR(order.paidAt AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD')`,
+        'date',
+      )
+      .addSelect('COALESCE(SUM(order.amount), 0)', 'revenue')
+      .addSelect('COUNT(order.id)', 'transactionCount')
+      .where('order.status = :paid', { paid: ListingPaymentStatus.PAID })
+      .andWhere(
+        `order.paidAt >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date - (CAST(:days AS integer) - 1)`,
+        { days },
+      )
+      .groupBy(`TO_CHAR(order.paidAt AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD')`)
+      .orderBy(`TO_CHAR(order.paidAt AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD')`, 'ASC')
+      .getRawMany<{
+        date: string;
+        revenue: string;
+        transactionCount: string;
+      }>();
+
+    const values = new Map(
+      rows.map((row) => [
+        row.date,
+        {
+          revenue: Number(row.revenue),
+          transactionCount: Number(row.transactionCount),
+        },
+      ]),
+    );
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const todayParts = formatter.formatToParts(new Date());
+    const part = (type: Intl.DateTimeFormatPartTypes) =>
+      Number(todayParts.find((item) => item.type === type)?.value);
+    const today = new Date(Date.UTC(part('year'), part('month') - 1, part('day')));
+    const series = Array.from({ length: days }, (_, index) => {
+      const date = new Date(today);
+      date.setUTCDate(today.getUTCDate() - (days - 1 - index));
+      const key = date.toISOString().slice(0, 10);
+      return {
+        date: key,
+        revenue: values.get(key)?.revenue || 0,
+        transactionCount: values.get(key)?.transactionCount || 0,
+      };
+    });
+
+    return { data: { range, series } };
+  }
+
   findByPostId(postId: number) {
     return this.orderRepo.findOne({ where: { postId } });
   }
@@ -898,7 +1076,10 @@ export class ListingPaymentService {
         lockedOrder.paidAt = new Date();
         await manager.save(lockedOrder);
         if (lockedOrder.orderType === MonetizationProductType.SUBSCRIPTION) {
-          await this.monetizationService.fulfillSubscription(manager, lockedOrder);
+          await this.monetizationService.fulfillSubscription(
+            manager,
+            lockedOrder,
+          );
         } else {
           await this.monetizationService.fulfill(manager, lockedOrder);
         }
@@ -992,9 +1173,7 @@ export class ListingPaymentService {
 
     return {
       data: orders.map((order) => {
-        const subscriptionPlanId = Number(
-          order.metadata?.subscriptionPlanId,
-        );
+        const subscriptionPlanId = Number(order.metadata?.subscriptionPlanId);
         return {
           ...order,
           planName:

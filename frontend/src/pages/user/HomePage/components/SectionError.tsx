@@ -21,7 +21,7 @@ function SectionError({
       <button
         type="button"
         onClick={onRetry}
-        className="mt-5 inline-flex h-10 items-center gap-2 rounded-lg bg-amber-500 px-5 font-medium text-white transition-colors hover:bg-amber-600"
+        className="mt-5 inline-flex h-15 items-center gap-2 rounded-lg bg-amber-500 px-5 font-medium text-white transition-colors hover:bg-amber-600"
       >
         <FontAwesomeIcon icon={faRotateRight} />
         Thử lại

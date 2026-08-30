@@ -96,6 +96,18 @@ export class ListingPaymentController {
   }
 
   @Roles(UserRole.ADMIN)
+  @Get('admin/revenue-summary')
+  getRevenueSummary() {
+    return this.paymentService.getRevenueSummary();
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Get('admin/revenue-trends')
+  getRevenueTrends(@Query('range') range?: string) {
+    return this.paymentService.getRevenueTrends(range);
+  }
+
+  @Roles(UserRole.ADMIN)
   @Get('admin/orders')
   findForAdmin() {
     return this.paymentService.findForAdmin();

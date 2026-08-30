@@ -27,7 +27,7 @@ interface Props {
 
 const methodLabels = {
   vnpay: "VNPay",
-  momo: "Ví MoMo",
+  momo: "MoMo",
   bank_transfer: "Chuyển khoản ngân hàng",
 };
 
