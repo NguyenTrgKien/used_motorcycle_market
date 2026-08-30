@@ -174,7 +174,9 @@ function Header() {
   const [searchPosts, setSearchPosts] = useState<SearchPost[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>(() => {
     try {
-      const value = JSON.parse(localStorage.getItem("recentVehicleSearches") || "[]");
+      const value = JSON.parse(
+        localStorage.getItem("recentVehicleSearches") || "[]",
+      );
       return Array.isArray(value)
         ? value.filter((item) => typeof item === "string").slice(0, 5)
         : [];
@@ -232,9 +234,7 @@ function Header() {
   }, []);
 
   useEffect(() => {
-    setSearchKeyword(
-      new URLSearchParams(location.search).get("keyword") || "",
-    );
+    setSearchKeyword(new URLSearchParams(location.search).get("keyword") || "");
   }, [location.search]);
 
   useEffect(() => {
@@ -355,9 +355,7 @@ function Header() {
     navigate(`/vehicles?${searchParams.toString()}`);
   };
 
-  const normalizedSearchKeyword = searchKeyword
-    .trim()
-    .toLocaleLowerCase("vi");
+  const normalizedSearchKeyword = searchKeyword.trim().toLocaleLowerCase("vi");
   const matchingBrands =
     normalizedSearchKeyword.length >= 2
       ? searchBrands
@@ -375,7 +373,8 @@ function Header() {
             searchPosts
               .filter((post) => post.vehicle?.modelName)
               .map((post) => {
-                const name = `${post.vehicle?.brandName || ""} ${post.vehicle?.modelName || ""}`.trim();
+                const name =
+                  `${post.vehicle?.brandName || ""} ${post.vehicle?.modelName || ""}`.trim();
                 return [name.toLocaleLowerCase("vi"), name];
               }),
           ).values(),
@@ -506,9 +505,12 @@ function Header() {
       [NotificationType.BANK_TRANSFER_SUBMITTED]: "/admin/transactions",
       [NotificationType.BANK_TRANSFER_REJECTED]: "/transactions",
       [NotificationType.BANK_TRANSFER_CONFIRMED]: "/transactions",
-      [NotificationType.IDENTITY_STATUS_UPDATED]: "/setting/identity-verification",
-      [NotificationType.NEW_IDENTITY_APPLICATION]: "/admin/identity-verifications",
-      [NotificationType.NEW_PROFESSIONAL_SELLER_APPLICATION]: "/admin/professional-sellers",
+      [NotificationType.IDENTITY_STATUS_UPDATED]:
+        "/setting/identity-verification",
+      [NotificationType.NEW_IDENTITY_APPLICATION]:
+        "/admin/identity-verifications",
+      [NotificationType.NEW_PROFESSIONAL_SELLER_APPLICATION]:
+        "/admin/professional-sellers",
       [NotificationType.NEW_REPORT]: "/admin/reports",
       [NotificationType.REPORT_STATUS_UPDATED]: `/my-reports?reportId=${notification.referenceId}`,
     };
