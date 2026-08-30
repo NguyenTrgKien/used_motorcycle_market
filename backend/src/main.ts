@@ -10,7 +10,7 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'http://localhost:5173',
-      'https://your-frontend-domain.onrender.com',
+      'https://used-motorcycle-market.vercel.app/',
     ],
     credentials: true,
   });
